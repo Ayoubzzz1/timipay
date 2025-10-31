@@ -32,6 +32,11 @@ function AuthPopupComplete() {
           window.opener.postMessage({ type: 'supabase-oauth-complete' }, '*')
         }
       } catch (_) {}
+      try {
+        // Prevent SPA from rendering in popup
+        document.body.innerHTML = ''
+        window.location.replace('about:blank')
+      } catch (_) {}
       try { window.close() } catch (_) {}
     }
     complete()
