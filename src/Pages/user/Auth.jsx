@@ -42,7 +42,7 @@ function Auth() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + '/signin?oauth=google',
+          redirectTo: window.location.origin + '/auth/popup-complete',
           skipBrowserRedirect: true,
         }
       })
@@ -61,23 +61,22 @@ function Auth() {
           `toolbar=no, location=no, status=no, menubar=no, scrollbars=yes, resizable=yes, width=${width}, height=${height}, top=${top}, left=${left}`
         )
 
-        // Poll for session and close popup when signed in
-        const poll = setInterval(async () => {
-          try {
-            const { data: userData } = await supabase.auth.getUser()
-            if (userData?.user) {
-              clearInterval(poll)
-              try { popup && popup.close() } catch (_) {}
-              toast.success('Signed in successfully', { id: t })
-              navigate('/signup?oauth=google')
-            }
-          } catch (_) {}
-        }, 800)
-
-        // Safety timeout to clear loader
-        setTimeout(() => {
-          toast.dismiss(t)
-        }, 4000)
+        // Listen for completion message from popup
+        const onMessage = async (e) => {
+          if (!e?.data || e.data.type !== 'supabase-oauth-complete') return
+          window.removeEventListener('message', onMessage)
+          try { popup && popup.close() } catch (_) {}
+          const { data: userData } = await supabase.auth.getUser()
+          if (userData?.user) {
+            toast.success('Signed in successfully', { id: t })
+            navigate('/signup?oauth=google')
+          } else {
+            toast.dismiss(t)
+          }
+        }
+        window.addEventListener('message', onMessage)
+        // Fallback: safety dismissal after 20s
+        setTimeout(() => { toast.dismiss(t); window.removeEventListener('message', onMessage) }, 20000)
       } else {
         toast.dismiss(t)
       }

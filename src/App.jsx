@@ -7,6 +7,7 @@ import Resgitre from "./Pages/user/Resgitre";
 import Auth from "./Pages/user/Auth";
 import Dashboard from "./Pages/user/Dashboard";
 import Verified from "./Pages/user/Verified";
+import AuthPopupComplete from "./Pages/user/AuthPopupComplete";
 import VideosUser from "./Pages/user/VideosUser";
 import Reward from "./Pages/user/Reward";
 import Withdraw from "./Pages/user/Withdraw";
@@ -26,6 +27,7 @@ function App() {
           <Route path="/how-it-works" element={<HowItWorks/>} />
           <Route path="/signup" element={<Resgitre/>} />
           <Route path="/verify" element={<Verified/>} />
+          <Route path="/auth/popup-complete" element={<AuthPopupComplete/>} />
           <Route path="/signin" element={<Auth/>} />
           <Route path="/dashboard" element={<Dashboard/>} />
           <Route path="/videos-user" element={<VideosUser/>} />
@@ -48,6 +50,7 @@ function TitleManager() {
       "/how-it-works": "How it works – Timipay",
       "/signin": "Sign in – Timipay",
       "/signup": "Create account – Timipay",
+      "/auth/popup-complete": "Completing sign-in – Timipay",
       "/verify": "Verify your email – Timipay",
       "/dashboard": "Dashboard – Timipay",
       "/videos-user": "Videos – Timipay",

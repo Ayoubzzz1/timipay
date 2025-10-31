@@ -119,11 +119,12 @@ function Register() {
       } catch (_) {}
 
       const t = toast.loading('Creating your account...')
+      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
       const { error } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
         options: {
-          emailRedirectTo: window.location.origin + '/verify',
+          emailRedirectTo: siteUrl + '/verify',
           data: {
             name: form.name,
             prename: form.prename,
@@ -395,10 +396,11 @@ function Register() {
       setIsResending(true)
       setResendInfo('')
       const t = toast.loading('Sending verification email...')
+      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: form.email,
-        options: { emailRedirectTo: window.location.origin + '/verify' }
+        options: { emailRedirectTo: siteUrl + '/verify' }
       })
       if (error) {
         setResendInfo(error.message)
