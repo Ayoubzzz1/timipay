@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import usePictureInPicture from 'react-use-pip';
+import usePictureInPicture from '../hooks/usePictureInPicture';
 import { Link } from 'react-router-dom';
 import Guestnavbar from '../compoents/Navbars/Guestnavbar';
 import Footer from '../compoents/Footer/Footer';

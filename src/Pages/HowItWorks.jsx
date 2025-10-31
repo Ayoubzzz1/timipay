@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import Guestnavbar from '../compoents/Navbars/Guestnavbar'
 import Footer from '../compoents/Footer/Footer'
-import usePictureInPicture from 'react-use-pip'
+import usePictureInPicture from '../hooks/usePictureInPicture'
 
 function HowItWorks() {
   const videoRef = useRef(null)
