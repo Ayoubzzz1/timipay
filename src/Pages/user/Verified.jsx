@@ -13,12 +13,33 @@ function Verified() {
 
   useEffect(() => {
     (async () => {
-      try { await supabase.auth.refreshSession() } catch (_) {}
       try {
+        // Handle hash tokens (#access_token ...) when coming back from email confirm
+        if (window.location.hash && window.location.hash.length > 1) {
+          const params = new URLSearchParams(window.location.hash.substring(1))
+          const access_token = params.get('access_token')
+          const refresh_token = params.get('refresh_token')
+          if (access_token && refresh_token) {
+            try { await supabase.auth.setSession({ access_token, refresh_token }) } catch (_) {}
+          }
+        }
+        // Handle code flow (?code=...)
+        try {
+          const search = new URLSearchParams(window.location.search)
+          const code = search.get('code')
+          if (code) {
+            try { await supabase.auth.exchangeCodeForSession({ code }) } catch (_) {}
+          }
+        } catch (_) {}
+        try { await supabase.auth.refreshSession() } catch (_) {}
         const { data } = await supabase.auth.getUser()
         const u = data?.user
         if (u?.email_confirmed_at || u?.confirmed_at) {
           setConfirmed(true)
+          // Clean URL
+          try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
+          // Auto-advance to step 3 shortly
+          setTimeout(() => navigate('/signup?step=3', { replace: true }), 1200)
         }
       } catch (_) {}
       setChecking(false)
