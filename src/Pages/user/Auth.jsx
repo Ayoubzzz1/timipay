@@ -39,10 +39,11 @@ function Auth() {
   const signInWithGoogle = async () => {
     const t = toast.loading('Opening Google sign-in...')
     try {
+      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + '/auth/popup-complete',
+          redirectTo: siteUrl + '/auth/popup-complete',
           skipBrowserRedirect: true,
         }
       })
@@ -92,9 +93,9 @@ function Auth() {
       <section className="bg-light py-5 mt-5">
         <div className="container py-4">
           <div className="row justify-content-center">
-            <div className="col-md-6 col-lg-5">
+            <div className="col-12 col-sm-10 col-md-8 col-lg-6 col-xl-5">
               <div className="card border-0 shadow" style={{ borderRadius: 16 }}>
-                <div className="card-body p-4 p-md-5">
+                <div className="card-body p-3 p-md-4 p-lg-5">
                   <div className="d-flex align-items-center gap-2 mb-2">
                     <i className="bi bi-lightning-charge-fill text-warning"></i>
                     <h2 className="h4 mb-0">Sign in to Timipay</h2>
@@ -135,25 +136,35 @@ function Auth() {
                   <form onSubmit={onSubmit}>
                     <div className="mb-3">
                       <label className="form-label fw-medium">Email</label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-white"><i className="bi bi-person"></i></span>
-                        <input type="email" className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"/>
+                      <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-white border-end-0">
+                          <i className="bi bi-person"></i>
+                        </span>
+                        <input 
+                          type="email" 
+                          className="form-control border-start-0" 
+                          value={email} 
+                          onChange={(e) => setEmail(e.target.value)} 
+                          placeholder="you@example.com"
+                        />
                       </div>
                     </div>
                     <div className="mb-3">
                       <label className="form-label fw-medium">Password</label>
-                      <div className="input-group">
-                        <span className="input-group-text bg-white"><i className="bi bi-lock"></i></span>
+                      <div className="input-group input-group-lg">
+                        <span className="input-group-text bg-white border-end-0">
+                          <i className="bi bi-lock"></i>
+                        </span>
                         <input 
                           type={showPassword ? 'text' : 'password'} 
-                          className="form-control" 
+                          className="form-control border-start-0 border-end-0" 
                           value={password} 
                           onChange={(e) => setPassword(e.target.value)} 
                           placeholder="••••••"
                         />
                         <button
                           type="button"
-                          className="btn btn-outline-secondary"
+                          className="btn btn-outline-secondary border-start-0"
                           onClick={() => setShowPassword(v => !v)}
                           aria-label={showPassword ? 'Hide password' : 'Show password'}
                         >
@@ -161,28 +172,35 @@ function Auth() {
                         </button>
                       </div>
                     </div>
-                    <div className="d-grid mt-3">
-                      <button type="submit" className="btn btn-warning text-white py-2 fw-semibold hover-lift" style={{ borderRadius: 10 }}>
+                    <div className="d-grid mt-4">
+                      <button type="submit" className="btn btn-warning text-white py-3 fw-semibold hover-lift" style={{ borderRadius: 10 }}>
                         <i className="bi bi-box-arrow-in-right me-2"></i>
                         Sign In
                       </button>
                     </div>
-                <div className="text-center my-3 text-muted">or</div>
-                <div className="d-grid">
-                  <button type="button" onClick={signInWithGoogle} className="btn btn-outline-dark d-flex align-items-center justify-content-center gap-2 hover-lift" style={{ borderRadius: 10 }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
-                      <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303C33.876,32.91,29.32,36,24,36c-6.627,0-12-5.373-12-12 s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24 s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
-                      <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.568,16.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657 C34.046,6.053,29.268,4,24,4C16.318,4,9.65,8.337,6.306,14.691z"/>
-                      <path fill="#4CAF50" d="M24,44c5.246,0,10.03-2.007,13.605-5.292l-6.276-5.314C29.242,35.091,26.715,36,24,36 c-5.304,0-9.852-3.071-11.289-7.449l-6.522,5.025C9.51,39.556,16.227,44,24,44z"/>
-                      <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-1.236,3.652-4.396,6.447-8.289,7.318c0.001,0,0.001,0.001,0.002,0.001 l6.276,5.314C32.861,41.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
-                    </svg>
-                    Continue with Google
-                  </button>
-                </div>
+                    <div className="text-center my-3 text-muted">or</div>
+                    <div className="d-grid">
+                      <button 
+                        type="button" 
+                        onClick={signInWithGoogle} 
+                        className="btn btn-outline-dark d-flex align-items-center justify-content-center gap-2 py-3 hover-lift" 
+                        style={{ borderRadius: 10 }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+                          <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303C33.876,32.91,29.32,36,24,36c-6.627,0-12-5.373-12-12 s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24 s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+                          <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.568,16.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657 C34.046,6.053,29.268,4,24,4C16.318,4,9.65,8.337,6.306,14.691z"/>
+                          <path fill="#4CAF50" d="M24,44c5.246,0,10.03-2.007,13.605-5.292l-6.276-5.314C29.242,35.091,26.715,36,24,36 c-5.304,0-9.852-3.071-11.289-7.449l-6.522,5.025C9.51,39.556,16.227,44,24,44z"/>
+                          <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-1.236,3.652-4.396,6.447-8.289,7.318c0.001,0,0.001,0.001,0.002,0.001 l6.276,5.314C32.861,41.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+                        </svg>
+                        Continue with Google
+                      </button>
+                    </div>
                   </form>
-                  <div className="mt-3 d-flex align-items-center justify-content-between">
-                    <p className="mb-0 text-muted">Don’t have an account?</p>
-                    <Link to="/signup" className="btn btn-sm btn-outline-warning fw-semibold">Create one</Link>
+                  <div className="mt-4 d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2">
+                    <p className="mb-0 text-muted text-center text-sm-start">Don't have an account?</p>
+                    <Link to="/signup" className="btn btn-outline-warning fw-semibold px-4">
+                      Create one
+                    </Link>
                   </div>
                 </div>
               </div>

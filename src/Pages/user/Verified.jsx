@@ -7,14 +7,7 @@ function Verified() {
   const navigate = useNavigate()
   const [checking, setChecking] = useState(true)
   const [confirmed, setConfirmed] = useState(false)
-  const goBackOrContinue = () => {
-    try {
-      const hasHistory = (window.history?.state?.idx ?? 0) > 0
-      if (hasHistory) {
-        navigate(-1, { replace: true })
-        return
-      }
-    } catch (_) {}
+  const goToSetup = () => {
     navigate('/signup?step=3', { replace: true })
   }
 
@@ -47,7 +40,7 @@ function Verified() {
                   <h3 className="text-dark mb-2">Thanks for verifying your email!</h3>
                   <p className="text-muted mb-4">Your email has been confirmed. Continue to finish setting up your account.</p>
                   <div className="d-flex justify-content-center gap-2">
-                    <button className="btn btn-warning text-white px-4" onClick={goBackOrContinue}>Continue setup</button>
+                    <button className="btn btn-warning text-white px-4" onClick={goToSetup}>Continue setup</button>
                     <button className="btn btn-outline-secondary px-4" onClick={() => navigate('/', { replace: true })}>Go to Home</button>
                   </div>
                   {!confirmed && !checking && (

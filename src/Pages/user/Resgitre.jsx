@@ -300,6 +300,43 @@ function Register() {
     checkGoogleOAuth();
   }, []);
 
+  // Respect explicit step in URL on first load (e.g., /signup?step=3)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const reqStep = parseInt(params.get('step') || '0', 10)
+      if (reqStep === 3) {
+        setCurrentStep(3)
+      }
+    } catch (_) {}
+  }, [])
+
+  // Handle email confirmation (magic link) in the same tab
+  useEffect(() => {
+    const maybeExchangeEmailCode = async () => {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const code = params.get('code')
+        const type = params.get('type') // e.g., signup, recovery
+        if (code && (type === 'signup' || type === 'recovery' || type === 'invite' || type === 'magiclink')) {
+          try { await supabase.auth.exchangeCodeForSession({ code }) } catch (_) {}
+          try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
+          // Re-check user and advance
+          try {
+            const { data } = await supabase.auth.getUser()
+            const u = data?.user
+            if (u?.email_confirmed_at || u?.confirmed_at) {
+              setIsVerified(true)
+              await upsertAfterVerifyOnce()
+              setCurrentStep(3)
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+    maybeExchangeEmailCode()
+  }, [])
+
   // Handle countdown timer on Step 2 (email verification)
   useEffect(() => {
     if (currentStep !== 2) return
@@ -423,6 +460,14 @@ function Register() {
 
   const checkAndAdvanceAfterVerification = async () => {
     try { await supabase.auth.refreshSession() } catch (_) {}
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+      if (code) {
+        try { await supabase.auth.exchangeCodeForSession({ code }) } catch (_) {}
+        try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
+      }
+    } catch (_) {}
     const { data } = await supabase.auth.getUser()
     const u = data?.user
     if (u?.email_confirmed_at || u?.confirmed_at) {

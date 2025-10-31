@@ -23,6 +23,7 @@
     "@tabler/icons-react": "^3.35.0",
     "@toolpad/core": "^0.16.0",
     "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.552.0",
     "motion": "^12.23.24",
@@ -33,7 +34,6 @@
     "react-phone-input-2": "^2.15.1",
     "react-pro-sidebar": "^1.1.0",
     "react-router-dom": "^7.9.4",
-    
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
