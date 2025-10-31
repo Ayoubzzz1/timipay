@@ -70,6 +70,7 @@ function Auth() {
           const { data: userData } = await supabase.auth.getUser()
           if (userData?.user) {
             toast.success('Signed in successfully', { id: t })
+            // Start the registration at Step 1, but with oauth=google so email/password & verification are skipped
             navigate('/signup?oauth=google')
           } else {
             toast.dismiss(t)
