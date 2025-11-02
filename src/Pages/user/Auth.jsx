@@ -39,11 +39,11 @@ function Auth() {
   const signInWithGoogle = async () => {
     const t = toast.loading('Opening Google sign-in...')
     try {
-      const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
+      const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '')
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: siteUrl + '/auth/popup-complete',
+          redirectTo: `${siteUrl}/auth/popup-complete`,
           skipBrowserRedirect: true,
         }
       })
