@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -37,6 +37,8 @@ import {
 } from '@mui/icons-material';
 import MuiNavbar from '../../compoents/Navbars/MuiNavbar';
 import { useUser } from '../../contexts/UserContext';
+import { savePoints } from '../../utils/pointsUtils';
+import toast from 'react-hot-toast';
 
 function VideosUser() {
   const { user, userData } = useUser();
@@ -54,7 +56,17 @@ function VideosUser() {
   const [isPipActive, setIsPipActive] = useState(false);
   const [pipError, setPipError] = useState(null);
   
+  // Ad state
+  const [showAd, setShowAd] = useState(false);
+  const [adTimeRemaining, setAdTimeRemaining] = useState(5);
+  const [isAdPlaying, setIsAdPlaying] = useState(false);
+  const [lastAdSecond, setLastAdSecond] = useState(0);
+  const [currentVideoTime, setCurrentVideoTime] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
+  
   const videoRef = useRef(null);
+  const adIntervalRef = useRef(null);
+  const adTimerRef = useRef(null);
 
   // Get API key from environment variables
   const API_KEY = import.meta.env.VITE_PIXEL_API_KEY || 'YOUR_PIXELS_API_KEY';
@@ -153,30 +165,116 @@ function VideosUser() {
     video.addEventListener('leavepictureinpicture', handleLeavePip);
 
     // Safari PiP events
-    video.addEventListener('webkitpresentationmodechanged', () => {
+    const handleWebkitPipChange = () => {
       if (video.webkitPresentationMode === 'picture-in-picture') {
         handleEnterPip();
       } else {
         handleLeavePip();
       }
-    });
+    };
+    video.addEventListener('webkitpresentationmodechanged', handleWebkitPipChange);
 
     return () => {
       video.removeEventListener('enterpictureinpicture', handleEnterPip);
       video.removeEventListener('leavepictureinpicture', handleLeavePip);
-      video.removeEventListener('webkitpresentationmodechanged', handleLeavePip);
+      video.removeEventListener('webkitpresentationmodechanged', handleWebkitPipChange);
     };
   }, [selectedVideo]);
 
-  // Ensure PiP is exited when modal closes
+  // Handle ad completion
+  const handleAdComplete = useCallback(async () => {
+    if (!user?.id) return;
+
+    console.log(`Ad finished at second ${currentVideoTime}`);
+    
+    try {
+      // Save points to database
+      const result = await savePoints(
+        user.id,
+        1, // 1 point per ad
+        'ad_watch',
+        `User watched an ad at ${currentVideoTime}s while watching video`
+      );
+
+      if (result.success) {
+        setTotalPoints(result.totalPoints);
+        toast.success(`+1 point! Total: ${result.totalPoints} points`, { duration: 2000 });
+        console.log(`User earned 1 point. Total: ${result.totalPoints}`);
+      } else {
+        console.error('Failed to save points:', result.error);
+        toast.error('Failed to save points. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error handling ad complete:', error);
+      toast.error('Error saving points');
+    }
+
+    // Hide ad and resume video
+    setShowAd(false);
+    setIsAdPlaying(false);
+    
+    if (videoRef.current) {
+      videoRef.current.play();
+    }
+  }, [user?.id, currentVideoTime]);
+
+  // Track video time and show ads every 10 seconds
   useEffect(() => {
-    return () => {
-      // Exit PiP when component unmounts or modal closes
-      if (isPipActive) {
-        exitPipMode();
+    if (!videoRef.current || !selectedVideo || showAd) return;
+
+    const video = videoRef.current;
+    const AD_INTERVAL = 10; // Show ad every 10 seconds
+    const AD_DURATION = 5; // Ad duration in seconds
+
+    const handleTimeUpdate = () => {
+      const current = Math.floor(video.currentTime);
+      setCurrentVideoTime(current);
+
+      // Check if we've reached an ad interval (every 10 seconds)
+      const secondsSinceLastAd = current - lastAdSecond;
+      
+      if (current > 0 && secondsSinceLastAd >= AD_INTERVAL && !showAd && !isAdPlaying) {
+        // Pause main video
+        video.pause();
+        
+        // Show ad
+        setShowAd(true);
+        setIsAdPlaying(true);
+        setAdTimeRemaining(AD_DURATION);
+        setLastAdSecond(current);
+        
+        console.log(`Ad started at second ${current}`);
       }
     };
-  }, [isPipActive]);
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [selectedVideo, showAd, isAdPlaying, lastAdSecond]);
+
+  // Handle ad countdown
+  useEffect(() => {
+    if (!showAd || !isAdPlaying) return;
+
+    adTimerRef.current = setInterval(() => {
+      setAdTimeRemaining((prev) => {
+        if (prev <= 1) {
+          // Ad finished - award points
+          handleAdComplete();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (adTimerRef.current) {
+        clearInterval(adTimerRef.current);
+      }
+    };
+  }, [showAd, isAdPlaying, handleAdComplete]);
 
   // Exit PiP mode safely
   const exitPipMode = async () => {
@@ -311,9 +409,33 @@ function VideosUser() {
     // Reset PiP state when new video is selected
     setIsPipActive(false);
     setPipError(null);
+    // Reset ad state when switching videos
+    setShowAd(false);
+    setIsAdPlaying(false);
+    setLastAdSecond(0);
+    setCurrentVideoTime(0);
+    setAdTimeRemaining(5);
+    // Clear any ad timers
+    if (adTimerRef.current) {
+      clearInterval(adTimerRef.current);
+      adTimerRef.current = null;
+    }
+    if (adIntervalRef.current) {
+      clearInterval(adIntervalRef.current);
+      adIntervalRef.current = null;
+    }
   };
 
   const handleCloseVideoModal = async () => {
+    // Clear ad timers
+    if (adIntervalRef.current) {
+      clearInterval(adIntervalRef.current);
+      adIntervalRef.current = null;
+    }
+    if (adTimerRef.current) {
+      clearInterval(adTimerRef.current);
+      adTimerRef.current = null;
+    }
     // Exit PiP when closing modal
     if (isPipActive) {
       await exitPipMode();
@@ -322,6 +444,10 @@ function VideosUser() {
     setSelectedVideo(null);
     setIsPipActive(false);
     setPipError(null);
+    setShowAd(false);
+    setIsAdPlaying(false);
+    setLastAdSecond(0);
+    setCurrentVideoTime(0);
   };
 
   const handleClearFilters = () => {
@@ -338,20 +464,93 @@ function VideosUser() {
   };
 
   // Autoplay next video when the current one ends (if enabled)
-  const handleVideoEnded = () => {
+  const handleVideoEnded = async () => {
     if (!autoplayEnabled || !selectedVideo) return;
     const currentIndex = videos.findIndex(v => v.id === selectedVideo.id);
     const nextIndex = (currentIndex + 1) % videos.length;
     const nextVideo = videos[nextIndex];
-    if (nextVideo) {
-      setSelectedVideo(nextVideo);
-      // Small timeout to allow modal content to update before playing
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.play().catch(() => {});
-        }
-      }, 100);
+    if (!nextVideo) return;
+    
+    // Check if PiP was active before switching
+    const wasPipActive = isPipActive || document.pictureInPictureElement === videoRef.current;
+    
+    // Exit PiP first if active (needed to update video source)
+    if (wasPipActive && document.pictureInPictureElement) {
+      try {
+        await document.exitPictureInPicture();
+      } catch (err) {
+        console.warn('Error exiting PiP for next video:', err);
+      }
     }
+    
+    // Switch to next video
+    setSelectedVideo(nextVideo);
+    
+    // Wait for video element to update and load new source (longer delay for React to recreate element with key prop)
+    setTimeout(async () => {
+      // Wait for React to recreate the video element
+      let video = videoRef.current;
+      let attempts = 0;
+      while (!video && attempts < 10) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        video = videoRef.current;
+        attempts++;
+      }
+      
+      if (!video) {
+        console.warn('Video element not found after switching videos');
+        return;
+      }
+      
+      // Wait for video to load the new source
+      const loadVideo = () => {
+        return new Promise((resolve) => {
+          if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+            resolve();
+          } else {
+            const onLoaded = () => {
+              video.removeEventListener('loadeddata', onLoaded);
+              resolve();
+            };
+            video.addEventListener('loadeddata', onLoaded);
+            // Fallback timeout
+            setTimeout(() => {
+              video.removeEventListener('loadeddata', onLoaded);
+              resolve();
+            }, 1000);
+          }
+        });
+      };
+      
+      try {
+        // Load and play the next video
+        await loadVideo();
+        await video.play();
+        
+        // Re-enter PiP if it was active before
+        if (wasPipActive && isPipAvailable()) {
+          // Small delay to ensure video is playing smoothly
+          setTimeout(async () => {
+            try {
+              const v = videoRef.current;
+              if (v && !v.paused && isPipAvailable()) {
+                // Handle Safari
+                if ('webkitSupportsPresentationMode' in v && typeof v.webkitSetPresentationMode === 'function') {
+                  v.webkitSetPresentationMode('picture-in-picture');
+                } else if (document.pictureInPictureEnabled && document.pictureInPictureElement !== v) {
+                  await v.requestPictureInPicture();
+                }
+              }
+            } catch (pipErr) {
+              console.warn('Could not re-enter PiP automatically:', pipErr);
+              // Don't show error to user, just continue playing
+            }
+          }, 400);
+        }
+      } catch (playErr) {
+        console.warn('Error playing next video:', playErr);
+      }
+    }, 200);
   };
 
   // Pick a smaller MP4 variant to keep PiP window compact
@@ -673,7 +872,7 @@ function VideosUser() {
                   </Tooltip>
                 )}
                 <FormControlLabel
-                  control={<Switch checked={autoplayEnabled} onChange={(e) => setAutoplayEnabled(e.target.value)} />}
+                  control={<Switch checked={autoplayEnabled} onChange={(e) => setAutoplayEnabled(e.target.checked)} />}
                   label="Autoplay"
                 />
                 <IconButton onClick={handleCloseVideoModal}>
@@ -684,13 +883,77 @@ function VideosUser() {
           </DialogTitle>
           <DialogContent>
             {selectedVideo && (
-              <Box>
+              <Box sx={{ position: 'relative' }}>
+                {/* Ad Overlay */}
+                {showAd && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 10,
+                      backgroundColor: 'rgba(0, 0, 0, 0.95)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 3,
+                    }}
+                  >
+                    <Typography variant="h4" color="white" fontWeight="bold">
+                      Ad Playing
+                    </Typography>
+                    
+                    {/* Fake Ad Content */}
+                    <Box
+                      sx={{
+                        width: '80%',
+                        maxWidth: '400px',
+                        height: '225px',
+                        backgroundColor: '#1a1a1a',
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid #fff',
+                      }}
+                    >
+                      <Box sx={{ textAlign: 'center', color: 'white' }}>
+                        <Typography variant="h5" mb={2}>
+                          🎬 ADVERTISEMENT
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                          Sample Ad Content
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" mt={1}>
+                          Watch this ad to earn 1 point!
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Ad Countdown Timer */}
+                    <Typography variant="h2" color="primary" fontWeight="bold">
+                      {adTimeRemaining}
+                    </Typography>
+                    <Typography variant="body1" color="white">
+                      Ad will end in {adTimeRemaining} second{adTimeRemaining !== 1 ? 's' : ''}
+                    </Typography>
+                  </Box>
+                )}
+
                 <video
+                  key={selectedVideo.id}
                   ref={videoRef}
                   controls
                   autoPlay
                   muted
                   onEnded={handleVideoEnded}
+                  onTimeUpdate={(e) => {
+                    const current = Math.floor(e.target.currentTime);
+                    setCurrentVideoTime(current);
+                  }}
                   style={{ width: '100%', maxHeight: '400px' }}
                   poster={selectedVideo.image || selectedVideo.picture}
                   playsInline

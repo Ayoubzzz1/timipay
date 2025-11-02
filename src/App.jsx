@@ -10,6 +10,7 @@ import Verified from "./Pages/user/Verified";
 import AuthPopupComplete from "./Pages/user/AuthPopupComplete";
 import VideosUser from "./Pages/user/VideosUser";
 import Reward from "./Pages/user/Reward";
+import RewardedPlayer from "./Pages/user/RewardedPlayer";
 import Withdraw from "./Pages/user/Withdraw";
 import Historique from "./Pages/user/Historique";
 import { Toaster } from 'react-hot-toast';
@@ -32,6 +33,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard/>} />
           <Route path="/videos-user" element={<VideosUser/>} />
           <Route path="/reward" element={<Reward/>} />
+          <Route path="/rewarded-player" element={<RewardedPlayer/>} />
           <Route path="/withdraw" element={<Withdraw/>} />
           <Route path="/historique" element={<Historique/>} />
         </Routes>
@@ -55,6 +57,7 @@ function TitleManager() {
       "/dashboard": "Dashboard – Timipay",
       "/videos-user": "Videos – Timipay",
       "/reward": "Rewards – Timipay",
+      "/rewarded-player": "Rewarded Player – Timipay",
       "/withdraw": "Withdraw – Timipay",
       "/historique": "History – Timipay",
     };

@@ -138,8 +138,18 @@ function Guestnavbar() {
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    clearCookie('tp_user');
+    try {
+      // Clear all persistent session data (localStorage and cookies)
+      const { sessionStorage } = await import('../../lib/supabaseClient');
+      await sessionStorage.clear();
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Fallback: try to sign out anyway
+      try {
+        await supabase.auth.signOut();
+        clearCookie('tp_user');
+      } catch (_) {}
+    }
     setUser(null);
     setIsDropdownOpen(false);
   };

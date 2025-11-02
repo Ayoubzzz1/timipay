@@ -1,7 +1,43 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 
 function usePictureInPicture(videoRef) {
   const [isActive, setIsActive] = useState(false)
+
+  // Listen for PiP events to update state
+  useEffect(() => {
+    const video = videoRef?.current
+    if (!video) return
+
+    const handleEnterPip = () => {
+      setIsActive(true)
+    }
+
+    const handleLeavePip = () => {
+      setIsActive(false)
+    }
+
+    video.addEventListener('enterpictureinpicture', handleEnterPip)
+    video.addEventListener('leavepictureinpicture', handleLeavePip)
+
+    // Safari support
+    if ('webkitSupportsPresentationMode' in video) {
+      const handleWebkitChange = () => {
+        setIsActive(video.webkitPresentationMode === 'picture-in-picture')
+      }
+      video.addEventListener('webkitpresentationmodechanged', handleWebkitChange)
+      
+      return () => {
+        video.removeEventListener('enterpictureinpicture', handleEnterPip)
+        video.removeEventListener('leavepictureinpicture', handleLeavePip)
+        video.removeEventListener('webkitpresentationmodechanged', handleWebkitChange)
+      }
+    }
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', handleEnterPip)
+      video.removeEventListener('leavepictureinpicture', handleLeavePip)
+    }
+  }, [videoRef])
 
   const togglePictureInPicture = useCallback(async (forceState) => {
     const video = videoRef?.current
@@ -14,7 +50,6 @@ function usePictureInPicture(videoRef) {
 
       if (!shouldEnter) {
         await document.exitPictureInPicture()
-        setIsActive(false)
         return
       }
 
@@ -22,7 +57,6 @@ function usePictureInPicture(videoRef) {
         try { await video.play() } catch (_) {}
       }
       await video.requestPictureInPicture()
-      setIsActive(true)
     } catch (_) {
       // ignore
     }

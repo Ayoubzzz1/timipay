@@ -301,40 +301,53 @@ function Register() {
   }, []);
 
   // Respect explicit step in URL on first load (e.g., /signup?step=3)
+  // This is used when user comes from /verify page after email confirmation
   useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const reqStep = parseInt(params.get('step') || '0', 10)
-      if (reqStep === 3) {
-        setCurrentStep(3)
-      }
-    } catch (_) {}
-  }, [])
-
-  // Handle email confirmation (magic link) in the same tab
-  useEffect(() => {
-    const maybeExchangeEmailCode = async () => {
+    const checkStepAndVerification = async () => {
       try {
         const params = new URLSearchParams(window.location.search)
-        const code = params.get('code')
-        const type = params.get('type') // e.g., signup, recovery
-        if (code && (type === 'signup' || type === 'recovery' || type === 'invite' || type === 'magiclink')) {
-          try { await supabase.auth.exchangeCodeForSession({ code }) } catch (_) {}
-          try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
-          // Re-check user and advance
+        const reqStep = parseInt(params.get('step') || '0', 10)
+        
+        if (reqStep === 3) {
+          console.log('Step 3 requested, checking verification status')
+          // User was redirected from /verify page with step=3
+          // Check if email is actually verified
           try {
             const { data } = await supabase.auth.getUser()
             const u = data?.user
-            if (u?.email_confirmed_at || u?.confirmed_at) {
+            console.log('User verification check:', {
+              hasUser: !!u,
+              email_confirmed_at: u?.email_confirmed_at,
+              confirmed_at: u?.confirmed_at
+            })
+            
+            if (u && (u.email_confirmed_at || u.confirmed_at)) {
+              // Email is verified, proceed to step 3
+              console.log('Email verified! Proceeding to step 3')
               setIsVerified(true)
               await upsertAfterVerifyOnce()
               setCurrentStep(3)
+              // Clean URL
+              window.history.replaceState({}, '', window.location.pathname)
+            } else {
+              // Email not verified yet, stay on step 2
+              console.log('Email not verified yet, staying on step 2')
+              setCurrentStep(2)
+              setErrors(prev => ({ ...prev, verify: 'Email verification required. Please check your email and click the verification link.' }))
             }
-          } catch (_) {}
+          } catch (err) {
+            console.error('Error checking verification:', err)
+            // If error, still try to go to step 3 if requested (user might be verified)
+            setCurrentStep(3)
+          }
         }
-      } catch (_) {}
+      } catch (err) {
+        console.error('Error checking step:', err)
+      }
     }
-    maybeExchangeEmailCode()
+    
+    checkStepAndVerification()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Handle countdown timer on Step 2 (email verification)

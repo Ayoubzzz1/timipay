@@ -163,14 +163,17 @@ function AccountSidebarPreview({ handleClick, open, mini }) {
 function SidebarFooterAccountPopover({ user, userData, isLoading, error }) {
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut();
+      // Clear all persistent session data (localStorage and cookies)
+      const { sessionStorage } = await import('../../lib/supabaseClient');
+      await sessionStorage.clear();
     } catch (error) {
       console.error('Sign out error:', error);
-    }
-    try {
-      document.cookie = 'tp_user=; path=/; max-age=0';
-    } catch (error) {
-      console.error('Cookie clear error:', error);
+      // Fallback: try to sign out anyway
+      try {
+        await supabase.auth.signOut();
+      } catch (signOutErr) {
+        console.error('Fallback sign out error:', signOutErr);
+      }
     }
     window.location.href = '/';
   };
@@ -408,15 +411,19 @@ function MuiNavbar({ children }) {
       signIn: () => {},
       signOut: async () => {
         try {
-          await supabase.auth.signOut();
+          // Clear all persistent session data (localStorage and cookies)
+          const { sessionStorage } = await import('../../lib/supabaseClient');
+          await sessionStorage.clear();
         } catch (error) {
           console.error('Sign out error:', error);
+          // Fallback: try to sign out anyway
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutErr) {
+            console.error('Fallback sign out error:', signOutErr);
+          }
         }
-        try {
-          document.cookie = 'tp_user=; path=/; max-age=0';
-        } catch (error) {
-          console.error('Cookie clear error:', error);
-        }
+        // Redirect to home
         window.location.href = '/';
       },
     };

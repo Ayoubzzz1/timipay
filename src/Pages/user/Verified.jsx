@@ -1,50 +1,115 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabaseClient'
 import Guestnavbar from '../../compoents/Navbars/Guestnavbar'
 
 function Verified() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [checking, setChecking] = useState(true)
   const [confirmed, setConfirmed] = useState(false)
+  const [error, setError] = useState(null)
+
   const goToSetup = () => {
     navigate('/signup?step=3', { replace: true })
   }
 
   useEffect(() => {
-    (async () => {
+    const handleVerification = async () => {
       try {
+        setChecking(true)
+        setError(null)
+
         // Handle hash tokens (#access_token ...) when coming back from email confirm
-        if (window.location.hash && window.location.hash.length > 1) {
-          const params = new URLSearchParams(window.location.hash.substring(1))
-          const access_token = params.get('access_token')
-          const refresh_token = params.get('refresh_token')
+        const hash = window.location.hash
+        if (hash && hash.length > 1) {
+          const hashParams = new URLSearchParams(hash.substring(1))
+          const access_token = hashParams.get('access_token')
+          const refresh_token = hashParams.get('refresh_token')
+          
           if (access_token && refresh_token) {
-            try { await supabase.auth.setSession({ access_token, refresh_token }) } catch (_) {}
+            console.log('Setting session from hash tokens')
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token
+            })
+            
+            if (sessionError) {
+              console.error('Error setting session from hash:', sessionError)
+              setError('Failed to set session. Please try again.')
+              setChecking(false)
+              return
+            }
+            
+            // Clean URL after processing hash
+            window.history.replaceState({}, '', window.location.pathname)
           }
         }
-        // Handle code flow (?code=...)
-        try {
-          const search = new URLSearchParams(window.location.search)
-          const code = search.get('code')
-          if (code) {
-            try { await supabase.auth.exchangeCodeForSession({ code }) } catch (_) {}
+
+        // Handle code flow (?code=...) - PKCE flow
+        const code = searchParams.get('code')
+        const type = searchParams.get('type')
+        
+        if (code && (type === 'signup' || type === 'recovery' || type === 'invite' || !type)) {
+          console.log('Exchanging code for session:', { code, type })
+          const { data: sessionData, error: codeError } = await supabase.auth.exchangeCodeForSession({ code })
+          
+          if (codeError) {
+            console.error('Error exchanging code:', codeError)
+            setError('Failed to verify email. Please try the link again.')
+            setChecking(false)
+            return
           }
-        } catch (_) {}
-        try { await supabase.auth.refreshSession() } catch (_) {}
-        const { data } = await supabase.auth.getUser()
-        const u = data?.user
-        if (u?.email_confirmed_at || u?.confirmed_at) {
+          
+          console.log('Code exchanged successfully, session:', sessionData)
+          
+          // Clean URL after processing code
+          window.history.replaceState({}, '', window.location.pathname)
+        }
+
+        // Refresh session to ensure we have latest user data
+        await supabase.auth.refreshSession()
+        
+        // Check if user is verified
+        const { data: userData, error: userError } = await supabase.auth.getUser()
+        
+        if (userError) {
+          console.error('Error getting user:', userError)
+          setError('Failed to verify user. Please try again.')
+          setChecking(false)
+          return
+        }
+
+        const user = userData?.user
+        console.log('User data:', { 
+          id: user?.id, 
+          email: user?.email,
+          email_confirmed_at: user?.email_confirmed_at,
+          confirmed_at: user?.confirmed_at
+        })
+
+        if (user && (user.email_confirmed_at || user.confirmed_at)) {
+          console.log('Email confirmed! Setting confirmed state and navigating to step 3')
           setConfirmed(true)
-          // Clean URL
-          try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
-          // Auto-advance to step 3 shortly
-          setTimeout(() => navigate('/signup?step=3', { replace: true }), 1200)
+          
+          // Small delay to show success message, then navigate
+          setTimeout(() => {
+            navigate('/signup?step=3', { replace: true })
+          }, 1500)
+        } else {
+          console.log('Email not confirmed yet')
+          setError('Email verification not complete. Please check your email and click the verification link again.')
         }
-      } catch (_) {}
-      setChecking(false)
-    })()
-  }, [])
+      } catch (err) {
+        console.error('Exception in verification:', err)
+        setError('An error occurred during verification. Please try again.')
+      } finally {
+        setChecking(false)
+      }
+    }
+
+    handleVerification()
+  }, [navigate, searchParams])
 
   return (
     <>
@@ -64,9 +129,27 @@ function Verified() {
                     <button className="btn btn-warning text-white px-4" onClick={goToSetup}>Continue setup</button>
                     <button className="btn btn-outline-secondary px-4" onClick={() => navigate('/', { replace: true })}>Go to Home</button>
                   </div>
-                  {!confirmed && !checking && (
+                  {checking && (
+                    <div className="alert alert-info mt-4 mb-0" role="alert">
+                      <div className="spinner-border spinner-border-sm me-2" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                      Verifying your email...
+                    </div>
+                  )}
+                  {error && !checking && (
+                    <div className="alert alert-danger mt-4 mb-0" role="alert">
+                      {error}
+                    </div>
+                  )}
+                  {!confirmed && !checking && !error && (
                     <div className="alert alert-warning mt-4 mb-0" role="alert">
                       We could not confirm your email yet. Please try the link again.
+                    </div>
+                  )}
+                  {confirmed && (
+                    <div className="alert alert-success mt-4 mb-0" role="alert">
+                      Email verified successfully! Redirecting to continue setup...
                     </div>
                   )}
                 </div>
