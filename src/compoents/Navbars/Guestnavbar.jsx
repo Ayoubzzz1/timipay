@@ -71,24 +71,31 @@ function Guestnavbar() {
     // Load current session user
     supabase.auth.getUser().then(async ({ data }) => {
       const u = data?.user;
-      if (!u) return;
+      if (!u) {
+        setUser(null);
+        clearCookie('tp_user');
+        return;
+      }
       try {
         const { data: profile } = await supabase
           .from('data_user')
           .select('id, interests, terms, name, prename')
           .eq('id', u.id)
           .maybeSingle();
-        if (isOnboardingComplete(profile)) {
+        // Show user if authenticated, even if onboarding incomplete
+        const minimal = { 
+          id: u.id, 
+          email: u.email, 
+          user_metadata: u.user_metadata || {},
+          ...(profile ? { profile } : {})
+        };
+        setUser(minimal);
+        writeCookie('tp_user', JSON.stringify(minimal));
+      } catch (_) {
+        // Still show user if session exists, even if profile fetch fails
           const minimal = { id: u.id, email: u.email, user_metadata: u.user_metadata || {} };
           setUser(minimal);
           writeCookie('tp_user', JSON.stringify(minimal));
-        } else {
-          setUser(null);
-          clearCookie('tp_user');
-        }
-      } catch (_) {
-        setUser(null);
-        clearCookie('tp_user');
       }
     });
 
@@ -106,18 +113,21 @@ function Guestnavbar() {
         .eq('id', u.id)
         .maybeSingle()
         .then(({ data: profile }) => {
-          if (isOnboardingComplete(profile)) {
-            const minimal = { id: u.id, email: u.email, user_metadata: u.user_metadata || {} };
+          // Show user if authenticated, even if onboarding incomplete
+          const minimal = { 
+            id: u.id, 
+            email: u.email, 
+            user_metadata: u.user_metadata || {},
+            ...(profile ? { profile } : {})
+          };
             setUser(minimal);
             writeCookie('tp_user', JSON.stringify(minimal));
-          } else {
-            setUser(null);
-            clearCookie('tp_user');
-          }
         })
         .catch(() => {
-          setUser(null);
-          clearCookie('tp_user');
+          // Still show user if session exists, even if profile fetch fails
+          const minimal = { id: u.id, email: u.email, user_metadata: u.user_metadata || {} };
+          setUser(minimal);
+          writeCookie('tp_user', JSON.stringify(minimal));
         });
     });
 
@@ -183,7 +193,7 @@ function Guestnavbar() {
               </div>
               <div className="logo-text">
                 <span className="text-dark">Timi</span>
-                <span className="text-warning">pay</span>
+            <span className="text-warning">pay</span>
               </div>
               {user && (
                 <div className="premium-badge">
@@ -223,7 +233,7 @@ function Guestnavbar() {
                       )}
                     </a>
                   )}
-                </li>
+              </li>
               ))}
             </ul>
 
@@ -261,16 +271,20 @@ function Guestnavbar() {
                   >
                     <div className="user-avatar">
                       <span className="avatar-text">
-                        {(user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
+                        {(user.profile?.name || user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
                       </span>
                       <div className="online-indicator"></div>
-                    </div>
+                      </div>
                     <div className="user-info">
-                      <span className="user-name">{user.user_metadata?.name || 'User'}</span>
+                      <span className="user-name">
+                        {user.profile?.name && user.profile?.prename 
+                          ? `${user.profile.name} ${user.profile.prename}`
+                          : user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User'}
+                      </span>
                       <span className="user-email">{user.email}</span>
-                    </div>
+                      </div>
                     <i className={`bi bi-chevron-down dropdown-arrow ${isDropdownOpen ? 'open' : ''}`}></i>
-                  </div>
+                    </div>
 
                   {/* User Dropdown Menu */}
                   {isDropdownOpen && (
@@ -281,11 +295,15 @@ function Guestnavbar() {
                       <div className="dropdown-header">
                         <div className="user-avatar-small">
                           <span className="avatar-text">
-                            {(user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
+                            {(user.profile?.name || user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div className="user-info-small">
-                          <div className="user-name">{user.user_metadata?.name || 'User'}</div>
+                          <div className="user-name">
+                            {user.profile?.name && user.profile?.prename 
+                              ? `${user.profile.name} ${user.profile.prename}`
+                              : user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User'}
+                          </div>
                           <div className="user-email">{user.email}</div>
                         </div>
                       </div>
@@ -295,7 +313,7 @@ function Guestnavbar() {
                       <Link to="/dashboard" className="dropdown-item" onClick={closeDropdown}>
                         <i className="bi bi-speedometer2"></i>
                         Dashboard
-                      </Link>
+                  </Link>
                       <Link to="/profile" className="dropdown-item" onClick={closeDropdown}>
                         <i className="bi bi-person"></i>
                         Profile Settings
@@ -365,14 +383,14 @@ function Guestnavbar() {
                 </div>
                 <div className="logo-text">
                   <span className="text-dark">Timi</span>
-                  <span className="text-warning">pay</span>
+                <span className="text-warning">pay</span>
                 </div>
               </div>
-            </Link>
-            <button 
+              </Link>
+              <button 
               className="close-drawer-btn" 
-              onClick={closeDrawer}
-              aria-label="Close"
+                onClick={closeDrawer}
+                aria-label="Close"
             >
               <i className="bi bi-x-lg"></i>
             </button>
@@ -386,12 +404,16 @@ function Guestnavbar() {
                 <div className="user-profile-card">
                   <div className="user-avatar-large">
                     <span className="avatar-text">
-                      {(user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
+                      {(user.profile?.name || user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase()}
                     </span>
                     <div className="online-indicator"></div>
                   </div>
                   <div className="user-info-large">
-                    <h6 className="mb-1">{user.user_metadata?.name || 'User'}</h6>
+                    <h6 className="mb-1">
+                      {user.profile?.name && user.profile?.prename 
+                        ? `${user.profile.name} ${user.profile.prename}`
+                        : user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User'}
+                    </h6>
                     <p className="mb-0 small text-muted">{user.email}</p>
                     <div className="earnings-badge">
                       <i className="bi bi-wallet2 me-1"></i>
@@ -412,8 +434,8 @@ function Guestnavbar() {
                       <Link 
                         to={item.href}
                         className={`drawer-nav-link ${location.pathname === item.href ? 'active' : ''}`}
-                        onClick={closeDrawer}
-                      >
+                  onClick={closeDrawer}
+                >
                         <div className="nav-link-icon">
                           <i className={item.icon}></i>
                         </div>
@@ -437,7 +459,7 @@ function Guestnavbar() {
                         )}
                       </a>
                     )}
-                  </li>
+              </li>
                 ))}
               </ul>
             </div>
