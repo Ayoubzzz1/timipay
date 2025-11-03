@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"composite": true,
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"types": ["node", "vite/client"],
+		"allowJs": true,
+		"resolveJsonModule": true
+	},
+	"include": [
+		"vite.config.*",
+		"vite.config.*.ts",
+		"scripts/**/*"
+	]
+}

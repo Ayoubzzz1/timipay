@@ -1,16 +1,63 @@
-import React, { useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Guestnavbar from '../compoents/Navbars/Guestnavbar'
 import Footer from '../compoents/Footer/Footer'
-import usePictureInPicture from '../hooks/usePictureInPicture'
 
 function HowItWorks() {
   const videoRef = useRef(null)
-  const {
-    isPictureInPictureActive,
-    isPictureInPictureAvailable,
-    togglePictureInPicture,
-  } = usePictureInPicture(videoRef)
+  const [isPictureInPictureActive, setIsPictureInPictureActive] = useState(false)
+  const [isPictureInPictureAvailable, setIsPictureInPictureAvailable] = useState(false)
+
+  // Native PiP demo (no ads)
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const checkSupport = () => {
+      const webkitSupported = 'webkitSupportsPresentationMode' in video &&
+        typeof video.webkitSetPresentationMode === 'function'
+      setIsPictureInPictureAvailable(!!document.pictureInPictureEnabled || webkitSupported)
+    }
+    checkSupport()
+
+    const handleEnter = () => setIsPictureInPictureActive(true)
+    const handleLeave = () => setIsPictureInPictureActive(false)
+    const handleWebkitChange = () => {
+      if (video.webkitPresentationMode === 'picture-in-picture') {
+        handleEnter()
+      } else {
+        handleLeave()
+      }
+    }
+
+    video.addEventListener('enterpictureinpicture', handleEnter)
+    video.addEventListener('leavepictureinpicture', handleLeave)
+    video.addEventListener('webkitpresentationmodechanged', handleWebkitChange)
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', handleEnter)
+      video.removeEventListener('leavepictureinpicture', handleLeave)
+      video.removeEventListener('webkitpresentationmodechanged', handleWebkitChange)
+    }
+  }, [])
+
+  const togglePictureInPicture = async (enable) => {
+    const video = videoRef.current
+    if (!video) return
+    try {
+      if ('webkitSupportsPresentationMode' in video && typeof video.webkitSetPresentationMode === 'function') {
+        video.webkitSetPresentationMode(enable ? 'picture-in-picture' : 'inline')
+        return
+      }
+      if (enable) {
+        if (document.pictureInPictureElement) await document.exitPictureInPicture()
+        if (video.paused) { try { await video.play() } catch (_) {} }
+        await video.requestPictureInPicture()
+      } else if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      }
+    } catch (_) {}
+  }
 
   return (
     <>

@@ -59,16 +59,25 @@ function Guestnavbar() {
 
     window.addEventListener('scroll', handleScroll);
 
-    // Optimistic UI: hydrate from cookie immediately
+    // Optimistic UI: hydrate from cookie immediately - but only if onboarding is complete
     try {
       const cached = readCookie('tp_user');
       if (cached) {
         const parsed = JSON.parse(cached);
+        // Only show user if onboarding is complete
+        if (parsed.profile && isOnboardingComplete(parsed.profile)) {
         setUser(parsed);
+        } else {
+          // Clear cookie if onboarding not complete
+          clearCookie('tp_user');
+        }
       }
-    } catch (_) {}
+    } catch (_) {
+      // Clear cookie on error
+      clearCookie('tp_user');
+    }
 
-    // Load current session user
+    // Load current session user - only show if onboarding is complete
     supabase.auth.getUser().then(async ({ data }) => {
       const u = data?.user;
       if (!u) {
@@ -82,24 +91,30 @@ function Guestnavbar() {
           .select('id, interests, terms, name, prename')
           .eq('id', u.id)
           .maybeSingle();
-        // Show user if authenticated, even if onboarding incomplete
-        const minimal = { 
-          id: u.id, 
-          email: u.email, 
-          user_metadata: u.user_metadata || {},
-          ...(profile ? { profile } : {})
-        };
-        setUser(minimal);
-        writeCookie('tp_user', JSON.stringify(minimal));
-      } catch (_) {
-        // Still show user if session exists, even if profile fetch fails
-          const minimal = { id: u.id, email: u.email, user_metadata: u.user_metadata || {} };
+        
+        // Only show user in navbar if onboarding is complete (has interests and terms accepted)
+        if (profile && isOnboardingComplete(profile)) {
+          const minimal = { 
+            id: u.id, 
+            email: u.email, 
+            user_metadata: u.user_metadata || {},
+            profile
+          };
           setUser(minimal);
           writeCookie('tp_user', JSON.stringify(minimal));
+        } else {
+          // User is authenticated but onboarding not complete - don't show in navbar
+          setUser(null);
+          clearCookie('tp_user');
+        }
+      } catch (_) {
+        // If profile fetch fails, don't show user (might be during registration)
+        setUser(null);
+        clearCookie('tp_user');
       }
     });
 
-    // Subscribe to auth changes
+    // Subscribe to auth changes - only show if onboarding is complete
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user || null;
       if (!u) {
@@ -113,21 +128,26 @@ function Guestnavbar() {
         .eq('id', u.id)
         .maybeSingle()
         .then(({ data: profile }) => {
-          // Show user if authenticated, even if onboarding incomplete
-          const minimal = { 
-            id: u.id, 
-            email: u.email, 
-            user_metadata: u.user_metadata || {},
-            ...(profile ? { profile } : {})
-          };
+          // Only show user in navbar if onboarding is complete (has interests and terms accepted)
+          if (profile && isOnboardingComplete(profile)) {
+            const minimal = { 
+              id: u.id, 
+              email: u.email, 
+              user_metadata: u.user_metadata || {},
+              profile
+            };
             setUser(minimal);
             writeCookie('tp_user', JSON.stringify(minimal));
+          } else {
+            // User is authenticated but onboarding not complete - don't show in navbar
+            setUser(null);
+            clearCookie('tp_user');
+          }
         })
         .catch(() => {
-          // Still show user if session exists, even if profile fetch fails
-          const minimal = { id: u.id, email: u.email, user_metadata: u.user_metadata || {} };
-          setUser(minimal);
-          writeCookie('tp_user', JSON.stringify(minimal));
+          // If profile fetch fails, don't show user (might be during registration)
+          setUser(null);
+          clearCookie('tp_user');
         });
     });
 
@@ -146,8 +166,8 @@ function Guestnavbar() {
       console.error('Sign out error:', error);
       // Fallback: try to sign out anyway
       try {
-        await supabase.auth.signOut();
-        clearCookie('tp_user');
+    await supabase.auth.signOut();
+    clearCookie('tp_user');
       } catch (_) {}
     }
     setUser(null);

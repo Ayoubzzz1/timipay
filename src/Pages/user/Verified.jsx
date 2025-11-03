@@ -20,6 +20,8 @@ function Verified() {
         setChecking(true)
         setError(null)
 
+        let hasProcessed = false
+
         // Handle hash tokens (#access_token ...) when coming back from email confirm
         const hash = window.location.hash
         if (hash && hash.length > 1) {
@@ -36,11 +38,15 @@ function Verified() {
             
             if (sessionError) {
               console.error('Error setting session from hash:', sessionError)
-              setError('Failed to set session. Please try again.')
-              setChecking(false)
-              return
+              // Don't show error if session already exists (user might have verified already)
+              if (!sessionError.message?.includes('already') && !sessionError.message?.includes('expired')) {
+                setError('Failed to set session. Please try again.')
+                setChecking(false)
+                return
+              }
             }
             
+            hasProcessed = true
             // Clean URL after processing hash
             window.history.replaceState({}, '', window.location.pathname)
           }
@@ -56,21 +62,35 @@ function Verified() {
           
           if (codeError) {
             console.error('Error exchanging code:', codeError)
-            setError('Failed to verify email. Please try the link again.')
-            setChecking(false)
-            return
+            // If code is already used or expired, check if user is already verified
+            if (codeError.message?.includes('already been used') || codeError.message?.includes('expired')) {
+              console.log('Code already used or expired, checking if user is verified')
+              // Continue to check verification status
+            } else {
+              setError('Failed to verify email. Please try the link again.')
+              setChecking(false)
+              return
+            }
+          } else {
+            console.log('Code exchanged successfully, session:', sessionData)
+            hasProcessed = true
           }
-          
-          console.log('Code exchanged successfully, session:', sessionData)
           
           // Clean URL after processing code
           window.history.replaceState({}, '', window.location.pathname)
         }
 
         // Refresh session to ensure we have latest user data
-        await supabase.auth.refreshSession()
+        try {
+          await supabase.auth.refreshSession()
+        } catch (refreshErr) {
+          console.warn('Session refresh warning:', refreshErr)
+          // Continue anyway
+        }
         
-        // Check if user is verified
+        // Check if user is verified - wait a bit for session to update
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
         const { data: userData, error: userError } = await supabase.auth.getUser()
         
         if (userError) {
@@ -96,9 +116,27 @@ function Verified() {
           setTimeout(() => {
             navigate('/signup?step=3', { replace: true })
           }, 1500)
-        } else {
-          console.log('Email not confirmed yet')
+        } else if (!hasProcessed) {
+          // Only show error if we didn't process anything and user is not verified
+          console.log('Email not confirmed yet and no verification data found')
           setError('Email verification not complete. Please check your email and click the verification link again.')
+        } else {
+          // If we processed something but user is not verified, wait a bit more
+          console.log('Processed verification but not confirmed yet, checking again...')
+          setTimeout(async () => {
+            const { data: retryData } = await supabase.auth.getUser()
+            const retryUser = retryData?.user
+            if (retryUser && (retryUser.email_confirmed_at || retryUser.confirmed_at)) {
+              setConfirmed(true)
+              setTimeout(() => {
+                navigate('/signup?step=3', { replace: true })
+              }, 1000)
+            } else {
+              setError('Email verification is being processed. Please wait a moment and refresh.')
+            }
+            setChecking(false)
+          }, 1000)
+          return // Don't set checking to false yet
         }
       } catch (err) {
         console.error('Exception in verification:', err)

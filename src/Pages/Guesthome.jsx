@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import usePictureInPicture from '../hooks/usePictureInPicture';
 import { Link } from 'react-router-dom';
 import Guestnavbar from '../compoents/Navbars/Guestnavbar';
 import Footer from '../compoents/Footer/Footer';
@@ -11,12 +10,74 @@ function Guesthome() {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [adsPerDay, setAdsPerDay] = useState(50);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [isPictureInPictureActive, setIsPictureInPictureActive] = useState(false);
+  const [isPictureInPictureAvailable, setIsPictureInPictureAvailable] = useState(false);
   const videoRef = useRef(null);
-  const {
-    isPictureInPictureActive,
-    isPictureInPictureAvailable,
-    togglePictureInPicture,
-  } = usePictureInPicture(videoRef);
+
+  // Native PiP demo (no ads) for the guest landing page
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const checkSupport = () => {
+      const webkitSupported = 'webkitSupportsPresentationMode' in video &&
+        typeof video.webkitSetPresentationMode === 'function';
+      setIsPictureInPictureAvailable(!!document.pictureInPictureEnabled || webkitSupported);
+    };
+
+    checkSupport();
+
+    const handleEnter = () => setIsPictureInPictureActive(true);
+    const handleLeave = () => setIsPictureInPictureActive(false);
+    const handleWebkitChange = () => {
+      if (video.webkitPresentationMode === 'picture-in-picture') {
+        handleEnter();
+      } else {
+        handleLeave();
+      }
+    };
+
+    video.addEventListener('enterpictureinpicture', handleEnter);
+    video.addEventListener('leavepictureinpicture', handleLeave);
+    video.addEventListener('webkitpresentationmodechanged', handleWebkitChange);
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', handleEnter);
+      video.removeEventListener('leavepictureinpicture', handleLeave);
+      video.removeEventListener('webkitpresentationmodechanged', handleWebkitChange);
+    };
+  }, []);
+
+  const togglePictureInPicture = async (enable) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    try {
+      // Safari support
+      if ('webkitSupportsPresentationMode' in video && typeof video.webkitSetPresentationMode === 'function') {
+        if (enable) {
+          video.webkitSetPresentationMode('picture-in-picture');
+        } else {
+          video.webkitSetPresentationMode('inline');
+        }
+        return;
+      }
+
+      // Standard PiP
+      if (enable) {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        }
+        // Ensure playing for PiP request
+        if (video.paused) {
+          try { await video.play(); } catch (_) {}
+        }
+        await video.requestPictureInPicture();
+      } else if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      }
+    } catch (_) {}
+  };
 
   useEffect(() => {
     setAnimateStats(true);
