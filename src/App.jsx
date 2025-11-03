@@ -9,6 +9,8 @@ import Dashboard from "./Pages/user/Dashboard";
 import Verified from "./Pages/user/Verified";
 import AuthPopupComplete from "./Pages/user/AuthPopupComplete";
 import VideosUser from "./Pages/user/VideosUser";
+import AdminLogin from "./Pages/admin/AdminLogin";
+import AdminDashboard from "./Pages/admin/AdminDashboard";
 import Withdraw from "./Pages/user/Withdraw";
 import Historique from "./Pages/user/Historique";
 import { Toaster } from 'react-hot-toast';
@@ -30,6 +32,8 @@ function App() {
           <Route path="/signin" element={<Auth/>} />
           <Route path="/dashboard" element={<Dashboard/>} />
           <Route path="/videos-user" element={<VideosUser/>} />
+          <Route path="/admin-timi" element={<AdminLogin/>} />
+          <Route path="/admin-timi/dashboard" element={<AdminDashboard/>} />
           <Route path="/withdraw" element={<Withdraw/>} />
           <Route path="/historique" element={<Historique/>} />
         </Routes>
@@ -52,6 +56,8 @@ function TitleManager() {
       "/verify": "Verify your email – Timipay",
       "/dashboard": "Dashboard – Timipay",
       "/videos-user": "Videos – Timipay",
+      "/admin-timi": "Admin Login – Timipay",
+      "/admin-timi/dashboard": "Admin Dashboard – Timipay",
       
       "/withdraw": "Withdraw – Timipay",
       "/historique": "History – Timipay",
