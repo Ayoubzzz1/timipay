@@ -53,7 +53,7 @@ function Usernavbar({ user, children }) {
             <img 
               src="/logotimi.png" 
               alt="Timipay Logo" 
-              style={{ height: '40px', width: 'auto', cursor: 'pointer' }}
+              style={{ height: '80px', width: 'auto', cursor: 'pointer' }}
             />
           </a>
 
