@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import {
   Home,
@@ -282,20 +282,14 @@ function MuiNavbar({ children }) {
         {/* Header */}
         <div className="p-4 border-b border-gray-200/50 bg-gradient-to-r from-blue-500/5 to-purple-500/5">
           <div className="flex items-center justify-between">
-            <div className={`flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'justify-center w-full' : ''}`}>
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/30">
-                <Wallet className="h-5 w-5" />
-                <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-400 border-2 border-white animate-pulse"></div>
-              </div>
-              {!isCollapsed && (
-                <div className="flex flex-col">
-                  <span className="text-base font-black text-gray-900 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    Timipay
-                  </span>
-                  <span className="text-xs font-medium text-gray-500">Payment Platform</span>
-                </div>
-              )}
-            </div>
+            <Link to="/" className={`flex items-center gap-3 transition-all duration-300 ${isCollapsed ? 'justify-center w-full' : ''}`}>
+              <img 
+                src="/logotimi.png" 
+                alt="Timipay Logo" 
+                className="cursor-pointer"
+                style={{ height: isCollapsed ? '40px' : '45px', width: 'auto' }}
+              />
+            </Link>
             {!isCollapsed && (
               <button
                 onClick={() => setIsCollapsed(!isCollapsed)}

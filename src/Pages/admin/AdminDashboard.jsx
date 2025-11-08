@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 
 function AdminDashboard() {
@@ -48,7 +48,16 @@ function AdminDashboard() {
   return (
     <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottom: '1px solid #e5e7eb', background: '#fff' }}>
-        <div style={{ fontWeight: 700 }}>Admin Dashboard</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <Link to="/">
+            <img 
+              src="/logotimi.png" 
+              alt="Timipay Logo" 
+              style={{ height: '40px', width: 'auto', cursor: 'pointer' }}
+            />
+          </Link>
+          <div style={{ fontWeight: 700 }}>Admin Dashboard</div>
+        </div>
         <button onClick={signOut} style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: 6, background: '#fff' }}>Sign out</button>
       </div>
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: 16 }}>

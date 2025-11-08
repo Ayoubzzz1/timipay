@@ -49,19 +49,12 @@ function Usernavbar({ user, children }) {
       >
         <div className="container-fluid px-4">
           {/* Logo/Brand */}
-          <a className="navbar-brand d-flex align-items-center gap-2" href="/" style={{ color: '#1f1f1f' }}>
-            <div 
-              className="d-flex align-items-center justify-content-center rounded"
-              style={{ 
-                width: 36, 
-                height: 36,
-                background: 'linear-gradient(135deg, #ffd54f 0%, #ffb300 100%)',
-                boxShadow: '0 2px 8px rgba(255, 193, 7, 0.25)'
-              }}
-            >
-              <i className="bi bi-hexagon-fill" style={{ fontSize: '1.1rem', color: '#fff' }}></i>
-            </div>
-            <span className="fw-semibold" style={{ fontSize: '1.1rem' }}>Timipay</span>
+          <a className="navbar-brand d-flex align-items-center" href="/" style={{ color: '#1f1f1f' }}>
+            <img 
+              src="/logotimi.png" 
+              alt="Timipay Logo" 
+              style={{ height: '40px', width: 'auto', cursor: 'pointer' }}
+            />
           </a>
 
           {/* Search Bar */}

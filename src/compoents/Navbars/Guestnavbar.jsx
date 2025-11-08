@@ -217,20 +217,11 @@ function Guestnavbar() {
         <div className="container">
           {/* Brand Logo */}
           <Link className="navbar-brand fw-bold d-flex align-items-center" to="/">
-            <div className="logo-wrapper">
-              <div className="logo-icon">
-                <i className="bi bi-lightning-charge-fill"></i>
-              </div>
-              <div className="logo-text">
-                <span className="text-dark">Timi</span>
-            <span className="text-warning">pay</span>
-              </div>
-              {user && (
-                <div className="premium-badge">
-                  <i className="bi bi-star-fill"></i>
-                </div>
-              )}
-            </div>
+            <img 
+              src="/logotimi.png" 
+              alt="Timipay Logo" 
+              style={{ height: '40px', width: 'auto', cursor: 'pointer' }}
+            />
           </Link>
 
           {/* Desktop Navigation */}
@@ -407,16 +398,12 @@ function Guestnavbar() {
           {/* Drawer Header */}
           <div className="drawer-header">
             <Link className="navbar-brand fw-bold d-flex align-items-center" to="/" onClick={closeDrawer}>
-              <div className="logo-wrapper">
-                <div className="logo-icon">
-                  <i className="bi bi-lightning-charge-fill"></i>
-                </div>
-                <div className="logo-text">
-                  <span className="text-dark">Timi</span>
-                <span className="text-warning">pay</span>
-                </div>
-              </div>
-              </Link>
+              <img 
+                src="/logotimi.png" 
+                alt="Timipay Logo" 
+                style={{ height: '40px', width: 'auto', cursor: 'pointer' }}
+              />
+            </Link>
               <button 
               className="close-drawer-btn" 
                 onClick={closeDrawer}
@@ -652,62 +639,13 @@ function Guestnavbar() {
           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
         }
 
-        /* Enhanced Logo Styling */
-        .logo-wrapper {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          position: relative;
+        /* Logo Styling */
+        .navbar-brand img {
+          transition: transform 0.3s ease;
         }
 
-        .logo-icon {
-          width: 42px;
-          height: 42px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 1.3rem;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        }
-
-        .navbar-brand:hover .logo-icon {
-          transform: rotate(15deg) scale(1.1);
-          box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        .logo-text {
-          font-size: 1.6rem;
-          line-height: 1;
-          font-weight: 800;
-          background: linear-gradient(135deg, #1a202c 0%, #4a5568 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-
-        .premium-badge {
-          position: absolute;
-          top: -5px;
-          right: -5px;
-          width: 16px;
-          height: 16px;
-          background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 0.5rem;
-          color: white;
-          border: 2px solid white;
-          animation: pulse-gold 2s infinite;
-        }
-
-        @keyframes pulse-gold {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.2); }
+        .navbar-brand:hover img {
+          transform: scale(1.05);
         }
 
         /* Enhanced Desktop Nav Links */

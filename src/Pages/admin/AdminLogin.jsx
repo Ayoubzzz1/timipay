@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 
 function AdminLogin() {
@@ -46,7 +46,14 @@ function AdminLogin() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: 16 }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: 16 }}>
+      <Link to="/" style={{ marginBottom: 24 }}>
+        <img 
+          src="/logotimi.png" 
+          alt="Timipay Logo" 
+          style={{ height: '50px', width: 'auto', cursor: 'pointer' }}
+        />
+      </Link>
       <div style={{ width: 380, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 20 }}>
         <h2 style={{ margin: 0, marginBottom: 6 }}>Admin Login</h2>
         <div style={{ color: '#6b7280', marginBottom: 12, fontSize: 14 }}>Access the Timipay admin dashboard</div>
