@@ -10,7 +10,6 @@ import Step from '@mui/material/Step'
 import StepLabel from '@mui/material/StepLabel'
 import Popterms from '../../compoents/Popterms'
 import 'react-phone-input-2/lib/style.css'
-import PhoneInput from 'react-phone-input-2'
 import Step1Personal from './register/Step1Personal'
 import Step2EmailVerify from './register/Step2EmailVerify'
 import Step3Interests from './register/Step3Interests'
@@ -30,16 +29,8 @@ function Register() {
   })
   const [interests, setInterests] = useState([])
   const [errors, setErrors] = useState({})
-  const [timerSeconds, setTimerSeconds] = useState(90)
-  const [isExpired, setIsExpired] = useState(false)
-  const [isResending, setIsResending] = useState(false)
-  const [resendInfo, setResendInfo] = useState('')
-  const [isVerified, setIsVerified] = useState(false)
-  const [hasAutoAdvanced, setHasAutoAdvanced] = useState(false)
-  const [pollId, setPollId] = useState(null)
   const [oauthGoogle, setOauthGoogle] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
-  const [didUpsertAfterVerify, setDidUpsertAfterVerify] = useState(false)
 
   const allInterests = ['Sport', 'Food', 'Technology', 'Music', 'Movies', 'Travel', 'Reading', 'Gaming', 'Fitness', 'Art', 'Photography', 'Cooking']
 
@@ -79,77 +70,28 @@ function Register() {
     return Object.keys(newErrors).length === 0
   }
 
-  const goNext = async () => {
-    if (currentStep === 1) {
-      if (!validateStep1()) return
-      if (oauthGoogle) {
-        try {
-          const { data } = await supabase.auth.getUser()
-          const u = data?.user
-          if (u) {
-            try { await supabase.auth.updateUser({ data: { role: 'user', name: form.name, prename: form.prename, gender: form.gender, phone: form.phone || '' } }) } catch (_) {}
-            await supabase.from('data_user').upsert({
-              id: u.id,
-              email: u.email,
-              name: form.name,
-              prename: form.prename,
-              gender: form.gender,
-              role: 'user',
-              phone: form.phone || '',
-              interests: [],
-              terms: form.terms === true
-            }, { onConflict: 'id' })
-          }
-        } catch (_) {}
-        setCurrentStep(3)
-        return
-      }
-      // Check if email already exists (either via prior signup or Google OAuth)
+  // Step 1: Handle registration and go to step 2
+  const handleStep1 = async () => {
+    if (!validateStep1()) return
+    
+    // Handle Google OAuth flow
+    if (oauthGoogle) {
       try {
-        const { data: existing } = await supabase
-          .from('data_user')
-          .select('id')
-          .eq('email', form.email)
-          .maybeSingle()
-        if (existing) {
-          setErrors({ email: 'This email is already registered' })
-          toast.error('This email is already registered')
-          return
-        }
-      } catch (_) {}
-
-      const t = toast.loading('Creating your account...')
-      const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '')
-      const { error } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: {
-          emailRedirectTo: `${siteUrl}/verify`,
-          data: {
-            name: form.name,
-            prename: form.prename,
-            gender: form.gender,
-            role: 'user',
-            phone: form.phone || ''
-          }
-        }
-      })
-      if (error) {
-        const friendly = /registered|exists|already/i.test(error.message)
-          ? 'This email is already registered'
-          : error.message
-        setErrors({ email: friendly })
-        toast.error(friendly, { id: t })
-        return
-      }
-      try {
-        // Create or update the profile row immediately after signup
-        const { data: userData } = await supabase.auth.getUser()
-        const authUser = userData?.user
-        if (authUser) {
-          const payload = {
-            id: authUser.id,
-            email: form.email,
+        const { data } = await supabase.auth.getUser()
+        const u = data?.user
+        if (u) {
+          await supabase.auth.updateUser({ 
+            data: { 
+              role: 'user', 
+              name: form.name, 
+              prename: form.prename, 
+              gender: form.gender, 
+              phone: form.phone || '' 
+            } 
+          })
+          await supabase.from('data_user').upsert({
+            id: u.id,
+            email: u.email,
             name: form.name,
             prename: form.prename,
             gender: form.gender,
@@ -157,73 +99,123 @@ function Register() {
             phone: form.phone || '',
             interests: [],
             terms: form.terms === true
-          }
-          const { error: upsertError } = await supabase
-            .from('data_user')
-            .upsert(payload, { onConflict: 'id' })
-          if (upsertError) {
-            // Non-blocking: show toast but continue flow
-            toast.error(upsertError.message)
-          }
+          }, { onConflict: 'id' })
         }
-      } catch (_) {}
-      toast.success('Signup successful! Check your email to verify.', { id: t })
-    }
-    if (currentStep === 2) {
-      // Email verification only
-      try {
-        const { data } = await supabase.auth.getUser()
-        const user = data?.user
-        if (!user || !user.email_confirmed_at) {
-          setErrors({ verify: 'Your email is not verified yet. Please click the link in your inbox, then try again.' })
-          return
-        }
-        await upsertAfterVerifyOnce()
-      } catch (_) {
-        setErrors({ verify: 'Unable to check verification status. Please try again.' })
-        return
+      } catch (err) {
+        console.error('OAuth update error:', err)
       }
-    }
-    if (currentStep === 3 && interests.length === 0) {
-      setErrors({ interests: 'Please select at least one interest' })
+      setCurrentStep(3)
       return
     }
-    if (currentStep === 3) {
-      // Persist interests as soon as the user completes the interests step
-      try {
-        const { data } = await supabase.auth.getUser()
-        const user = data?.user
-        if (user) {
-          await supabase
-            .from('data_user')
-            .update({ interests, terms: form.terms === true })
-            .eq('id', user.id)
-        }
-      } catch (_) {}
+
+    // Check if email already exists
+    try {
+      const { data: existing } = await supabase
+        .from('data_user')
+        .select('id')
+        .eq('email', form.email)
+        .maybeSingle()
+      if (existing) {
+        setErrors({ email: 'This email is already registered' })
+        toast.error('This email is already registered')
+        return
+      }
+    } catch (err) {
+      console.error('Email check error:', err)
     }
+
+    // Sign up with email verification link
+    const t = toast.loading('Creating your account...')
+    const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '')
+    const { error } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+      options: {
+        emailRedirectTo: `${siteUrl}/verify`,
+        data: {
+          name: form.name,
+          prename: form.prename,
+          gender: form.gender,
+          role: 'user',
+          phone: form.phone || ''
+        }
+      }
+    })
+    
+    if (error) {
+      const friendly = /registered|exists|already/i.test(error.message)
+        ? 'This email is already registered'
+        : error.message
+      setErrors({ email: friendly })
+      toast.error(friendly, { id: t })
+      return
+    }
+
+    toast.success('Verification email sent! Check your inbox.', { id: t })
+    
+    // Go to step 2 and wait for email confirmation
+    setCurrentStep(2)
     setErrors({})
-    setCurrentStep(prev => Math.min(prev + 1, 4))
   }
 
-  const upsertAfterVerifyOnce = async () => {
-    if (didUpsertAfterVerify) return
+  // Step 2: Check email verification (manual check via button)
+  const handleStep2 = async () => {
     try {
       const { data } = await supabase.auth.getUser()
       const user = data?.user
-      if (!user) return
-      const payload = {
-        id: user.id,
-        email: user.email,
-        name: form.name,
-        prename: form.prename,
-        gender: form.gender,
-        role: 'user',
-        phone: form.phone || '',
-        terms: form.terms === true
+      if (!user || !user.email_confirmed_at) {
+        setErrors({ verify: 'Please verify your email by clicking the link we sent you.' })
+        toast.error('Email not verified yet')
+        return
       }
-      await supabase.from('data_user').upsert(payload, { onConflict: 'id' })
-      setDidUpsertAfterVerify(true)
-    } catch (_) {}
+      // Email is verified, proceed to step 3
+      setCurrentStep(3)
+      setErrors({})
+    } catch (err) {
+      setErrors({ verify: 'Unable to check verification status. Please try again.' })
+    }
+  }
+
+  // Step 3: Save interests and go to step 4
+  const handleStep3 = async () => {
+    if (interests.length === 0) {
+      setErrors({ interests: 'Please select at least one interest' })
+      return
+    }
+
+    // Save interests
+    try {
+      const { data } = await supabase.auth.getUser()
+      const user = data?.user
+      if (user) {
+        await supabase.from('data_user').update({ 
+          interests, 
+          terms: form.terms === true 
+        }).eq('id', user.id)
+      }
+    } catch (err) {
+      console.error('Interests update error:', err)
+    }
+
+    setErrors({})
+    setCurrentStep(4)
+  }
+
+  const goNext = async () => {
+    if (currentStep === 1) {
+      await handleStep1()
+      return
+    }
+    
+    if (currentStep === 2) {
+      await handleStep2()
+      return
+    }
+    
+    if (currentStep === 3) {
+      await handleStep3()
+      return
+    }
   }
 
   const goBack = () => {
@@ -235,270 +227,240 @@ function Register() {
     try {
       const t = toast.loading('Finalizing your profile...')
       const { data } = await supabase.auth.getUser()
-      if (data?.user) {
-        await supabase.auth.updateUser({ data: { interests } })
-        const userId = data.user.id
-        const payload = {
-          id: userId,
-          name: form.name,
-          prename: form.prename,
-          email: form.email,
-          gender: form.gender,
-          role: 'user',
-          phone: form.phone || '',
-          interests: interests,
-          terms: form.terms === true,
-        }
-        const { error: upsertError } = await supabase
-          .from('data_user')
-          .upsert(payload, { onConflict: 'id' })
-        if (upsertError) {
-          toast.error(upsertError.message, { id: t })
-        } else {
-          toast.success('Profile saved. Redirecting...', { id: t })
-        }
+      
+      if (!data?.user) {
+        toast.error('Please sign in to continue', { id: t })
+        navigate('/signin', { replace: true })
+        return
       }
-    } catch (e) {
-      // ignore for now
-      toast.error('Could not finalize profile')
+
+      // Update user profile with interests
+      const { error: updateError } = await supabase.from('data_user').update({
+        interests: interests,
+        terms: form.terms === true
+      }).eq('id', data.user.id)
+
+      if (updateError) {
+        throw updateError
+      }
+
+      toast.success('Profile completed! Redirecting...', { id: t })
+      
+      // Small delay to show success message
+      setTimeout(() => {
+        navigate('/dashboard', { replace: true })
+      }, 500)
+    } catch (err) {
+      console.error('Profile finalization error:', err)
+      toast.error('Could not finalize profile. Please try again.')
+      navigate('/signin', { replace: true })
     }
-    navigate('/dashboard')
   }
 
-  // Check for Google OAuth flow on component mount
+  // Check for Google OAuth flow on mount
   useEffect(() => {
     const checkGoogleOAuth = async () => {
       try {
-        const params = new URLSearchParams(window.location.search);
-        const oauthParam = params.get('oauth');
+        const params = new URLSearchParams(window.location.search)
+        const oauthParam = params.get('oauth')
         
         if (oauthParam === 'google') {
-          // Check if user is authenticated via Google
-          const { data } = await supabase.auth.getUser();
-          const user = data?.user;
+          const { data } = await supabase.auth.getUser()
+          const user = data?.user
           
           if (user) {
-            setOauthGoogle(true);
-            
-            // Pre-fill form with Google user data
+            setOauthGoogle(true)
             setForm(prev => ({
               ...prev,
               name: user.user_metadata?.name?.split(' ')[0] || '',
               prename: user.user_metadata?.name?.split(' ').slice(1).join(' ') || '',
               email: user.email || '',
-            }));
-            
-            // Clean URL parameters
-            window.history.replaceState({}, '', window.location.pathname);
-          }
-        }
-      } catch (error) {
-        console.error('Error checking Google OAuth:', error);
-      }
-    };
-    
-    checkGoogleOAuth();
-  }, []);
-
-  // Respect explicit step in URL on first load (e.g., /signup?step=3)
-  // This is used when user comes from /verify page after email confirmation
-  useEffect(() => {
-    const checkStepAndVerification = async () => {
-      try {
-        const params = new URLSearchParams(window.location.search)
-        const reqStep = parseInt(params.get('step') || '0', 10)
-        
-        if (reqStep === 3) {
-          console.log('Step 3 requested, checking verification status')
-          // User was redirected from /verify page with step=3
-          // Check if email is actually verified
-          try {
-            const { data } = await supabase.auth.getUser()
-            const u = data?.user
-            console.log('User verification check:', {
-              hasUser: !!u,
-              email_confirmed_at: u?.email_confirmed_at,
-              confirmed_at: u?.confirmed_at
-            })
-            
-            if (u && (u.email_confirmed_at || u.confirmed_at)) {
-              // Email is verified, proceed to step 3
-              console.log('Email verified! Proceeding to step 3')
-              setIsVerified(true)
-              await upsertAfterVerifyOnce()
-              setCurrentStep(3)
-              // Clean URL
-              window.history.replaceState({}, '', window.location.pathname)
-            } else {
-              // Email not verified yet, stay on step 2
-              console.log('Email not verified yet, staying on step 2')
-              setCurrentStep(2)
-              setErrors(prev => ({ ...prev, verify: 'Email verification required. Please check your email and click the verification link.' }))
-            }
-          } catch (err) {
-            console.error('Error checking verification:', err)
-            // If error, still try to go to step 3 if requested (user might be verified)
-            setCurrentStep(3)
+            }))
+            window.history.replaceState({}, '', window.location.pathname)
           }
         }
       } catch (err) {
-        console.error('Error checking step:', err)
+        console.error('Google OAuth check error:', err)
       }
     }
     
-    checkStepAndVerification()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    checkGoogleOAuth()
   }, [])
 
-  // Handle countdown timer on Step 2 (email verification)
+  // Check if user is coming from verification page (step 3 query param)
   useEffect(() => {
-    if (currentStep !== 2) return
-    // If user arrived with ?step=3, only honor it when already confirmed
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const reqStep = params.get('step')
-      if (reqStep === '3') {
-        // We'll only jump to step 3 after a real confirmation check (listener/poller/button)
-        window.history.replaceState({}, '', window.location.pathname)
-      }
-    } catch (_) {}
-    setIsExpired(false)
-    setResendInfo('')
-    setTimerSeconds(90)
-    setIsVerified(false)
-    const id = setInterval(() => {
-      setTimerSeconds(prev => {
-        if (prev <= 1) {
-          clearInterval(id)
-          setIsExpired(true)
-          return 0
+    const checkStepParam = async () => {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const step = params.get('step')
+        
+        if (step === '3') {
+          // User is coming from verification page, check if they're verified
+          const { data } = await supabase.auth.getUser()
+          if (data?.user?.email_confirmed_at) {
+            // Update form with user metadata
+            setForm(prev => ({
+              ...prev,
+              email: data.user.email || prev.email,
+              name: data.user.user_metadata?.name || prev.name,
+              prename: data.user.user_metadata?.prename || prev.prename,
+              gender: data.user.user_metadata?.gender || prev.gender,
+              phone: data.user.user_metadata?.phone || prev.phone
+            }))
+            
+            // Clean URL
+            window.history.replaceState({}, '', window.location.pathname)
+            setCurrentStep(3)
+          } else {
+            // Not verified, go back to step 2
+            setCurrentStep(2)
+            setErrors({ verify: 'Please verify your email first.' })
+          }
         }
-        return prev - 1
-      })
-    }, 1000)
-    return () => clearInterval(id)
-  }, [currentStep])
+      } catch (err) {
+        console.error('Step param check error:', err)
+      }
+    }
+    
+    checkStepParam()
+  }, [])
 
-  // Listen for auth changes (e.g., after clicking email link, session is set)
+  // Listen for auth state changes (email verification) - only when on step 2
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const u = session?.user
-      if (u?.email_confirmed_at || u?.confirmed_at) {
-        setIsVerified(true)
-        setErrors(prev => ({ ...prev, verify: undefined }))
-        if (currentStep === 2 && !hasAutoAdvanced) {
-          setHasAutoAdvanced(true)
-          // Clean query params and stay on the same page
-          try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
-          await upsertAfterVerifyOnce()
+    // Only listen for auth changes when we're on step 2 (waiting for email verification)
+    if (currentStep !== 2) {
+      return // Exit early if not on step 2
+    }
+
+    let mounted = true
+    let hasCheckedInitial = false
+
+    // First, check current auth state
+    const checkInitialAuth = async () => {
+      try {
+        const { data } = await supabase.auth.getUser()
+        if (data?.user?.email_confirmed_at && mounted && currentStep === 2) {
+          // User is already verified, go to step 3
+          setForm(prev => ({
+            ...prev,
+            email: data.user.email || prev.email,
+            name: data.user.user_metadata?.name || prev.name,
+            prename: data.user.user_metadata?.prename || prev.prename,
+            gender: data.user.user_metadata?.gender || prev.gender,
+            phone: data.user.user_metadata?.phone || prev.phone
+          }))
+          
+          try {
+            await supabase.from('data_user').upsert({
+              id: data.user.id,
+              email: data.user.email,
+              name: data.user.user_metadata?.name,
+              prename: data.user.user_metadata?.prename,
+              gender: data.user.user_metadata?.gender,
+              role: 'user',
+              phone: data.user.user_metadata?.phone || '',
+              interests: [],
+              terms: form.terms === true
+            }, { onConflict: 'id' })
+          } catch (err) {
+            console.error('Profile creation error:', err)
+          }
+          
+          if (mounted) {
+            toast.success('Email verified!')
+            setCurrentStep(3)
+          }
+        }
+        hasCheckedInitial = true
+      } catch (err) {
+        console.error('Initial auth check error:', err)
+        hasCheckedInitial = true
+      }
+    }
+
+    checkInitialAuth()
+
+    // Then listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Skip initial session event if we just checked
+      if (!hasCheckedInitial && event === 'INITIAL_SESSION') {
+        return
+      }
+
+      // Only proceed if we're still on step 2, component is mounted, and email is confirmed
+      if (!mounted || currentStep !== 2) return
+      
+      // Only handle SIGNED_IN events (not TOKEN_REFRESHED or other events)
+      if (event === 'SIGNED_IN' && session?.user?.email_confirmed_at) {
+        // Update form with user data
+        setForm(prev => ({
+          ...prev,
+          email: session.user.email || prev.email,
+          name: session.user.user_metadata?.name || prev.name,
+          prename: session.user.user_metadata?.prename || prev.prename,
+          gender: session.user.user_metadata?.gender || prev.gender,
+          phone: session.user.user_metadata?.phone || prev.phone
+        }))
+        
+        // Create or update user profile
+        try {
+          await supabase.from('data_user').upsert({
+            id: session.user.id,
+            email: session.user.email,
+            name: session.user.user_metadata?.name,
+            prename: session.user.user_metadata?.prename,
+            gender: session.user.user_metadata?.gender,
+            role: 'user',
+            phone: session.user.user_metadata?.phone || '',
+            interests: [],
+            terms: form.terms === true
+          }, { onConflict: 'id' })
+        } catch (err) {
+          console.error('Profile creation error:', err)
+        }
+        
+        if (mounted) {
+          toast.success('Email verified!')
           setCurrentStep(3)
         }
       }
     })
+
     return () => {
-      sub.subscription.unsubscribe()
+      mounted = false
+      subscription.unsubscribe()
     }
-  }, [])
+  }, [currentStep, form.terms])
 
-  // Note: do not auto-advance on mount. We only advance from Step 2 after verification is confirmed.
-
-  // While on Step 2, poll Supabase for verification and auto-advance when confirmed
-  useEffect(() => {
-    if (currentStep !== 2) {
-      if (pollId) {
-        clearInterval(pollId)
-        setPollId(null)
-      }
-      return
-    }
-    const id = setInterval(async () => {
-      try {
-        const { data } = await supabase.auth.getUser()
-        const u = data?.user
-        if (u?.email_confirmed_at || u?.confirmed_at) {
-          setIsVerified(true)
-          setErrors(prev => ({ ...prev, verify: undefined }))
-          if (!hasAutoAdvanced) {
-            setHasAutoAdvanced(true)
-            // Clean query params and stay on the same page
-            try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
-            await upsertAfterVerifyOnce()
-            setCurrentStep(3)
-            toast.success('Email verified')
-          }
-        }
-      } catch (_) {
-        // ignore
-      }
-    }, 3000)
-    setPollId(id)
-    return () => clearInterval(id)
-  }, [currentStep, hasAutoAdvanced])
-
-  const mmss = (total) => {
-    const m = Math.floor(total / 60).toString().padStart(1, '0')
-    const s = (total % 60).toString().padStart(2, '0')
-    return `${m}:${s}`
-  }
-
-  const resendVerification = async () => {
+  const resendVerificationEmail = async () => {
     try {
-      setIsResending(true)
-      setResendInfo('')
       const t = toast.loading('Sending verification email...')
       const siteUrl = (import.meta.env.VITE_SITE_URL || window.location.origin).replace(/\/$/, '')
+      
       const { error } = await supabase.auth.resend({
         type: 'signup',
         email: form.email,
-        options: { emailRedirectTo: `${siteUrl}/verify` }
+        options: { 
+          emailRedirectTo: `${siteUrl}/verify` 
+        }
       })
+      
       if (error) {
-        setResendInfo(error.message)
         toast.error(error.message, { id: t })
-        setIsResending(false)
         return
       }
-      // reset timer and enable verify again
-      setTimerSeconds(90)
-      setIsExpired(false)
-      setResendInfo('Verification email sent again. Please check your inbox.')
-      toast.success('Verification email sent', { id: t })
-    } catch (e) {
-      setResendInfo(e.message)
-      toast.error(e.message)
-    } finally {
-      setIsResending(false)
+      
+      toast.success('Verification email sent! Check your inbox.', { id: t })
+    } catch (err) {
+      toast.error('Failed to resend email')
     }
   }
-
-  const checkAndAdvanceAfterVerification = async () => {
-    try { await supabase.auth.refreshSession() } catch (_) {}
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const code = params.get('code')
-      if (code) {
-        try { await supabase.auth.exchangeCodeForSession({ code }) } catch (_) {}
-        try { window.history.replaceState({}, '', window.location.pathname) } catch (_) {}
-      }
-    } catch (_) {}
-    const { data } = await supabase.auth.getUser()
-    const u = data?.user
-    if (u?.email_confirmed_at || u?.confirmed_at) {
-      setIsVerified(true)
-      await upsertAfterVerifyOnce()
-      setCurrentStep(3)
-      return
-    }
-    toast.error('Not verified yet. Please click the link in your email.')
-  }
-
-  const progressPercentage = ((currentStep - 1) / (steps.length - 1)) * 100
 
   return (
     <>
       <Guestnavbar />
 
-      <section className="bg-light min-vh-100 py-5 mt-5" style={{ backgroundImage: 'linear-gradient(180deg, rgba(102,126,234,0.06), rgba(118,75,162,0.06))' }}>
+      <section className="bg-light min-vh-100 py-5 mt-20" style={{ backgroundImage: 'linear-gradient(180deg, rgba(102,126,234,0.06), rgba(118,75,162,0.06))' }}>
         <div className="container py-4">
           <div className="row justify-content-center">
             <div className="col-lg-8 col-xl-7">
@@ -548,16 +510,11 @@ function Register() {
                   {currentStep === 2 && (
                     <Step2EmailVerify
                       email={form.email}
-                      isVerified={isVerified}
-                      timerSeconds={timerSeconds}
-                      isExpired={isExpired}
-                      isResending={isResending}
-                      resendInfo={resendInfo}
+                      isVerified={false}
                       errorMessage={errors.verify}
                       onBack={goBack}
-                      onResend={resendVerification}
-                      onCheckAndContinue={checkAndAdvanceAfterVerification}
-                      mmss={mmss}
+                      onResend={resendVerificationEmail}
+                      onContinue={goNext}
                     />
                   )}
 
@@ -579,7 +536,9 @@ function Register() {
                       <div className="mb-4">
                         <i className="bi bi-trophy-fill text-warning" style={{ fontSize: '4rem' }}></i>
                       </div>
-                      <h3 className="fw-bold mb-3 text-dark d-flex align-items-center justify-content-center gap-2">Welcome to Timipay! <span role="img" aria-label="party">🎉</span></h3>
+                      <h3 className="fw-bold mb-3 text-dark d-flex align-items-center justify-content-center gap-2">
+                        Welcome to Timipay! <span role="img" aria-label="party">🎉</span>
+                      </h3>
                       <p className="text-muted mb-4 fs-5">
                         Hello champion! Your account is ready. Let's start earning money together.
                       </p>
@@ -613,7 +572,9 @@ function Register() {
           </div>
         </div>
       </section>
+      
       <Footer />
+      
       <Popterms 
         open={showTerms} 
         onClose={() => setShowTerms(false)} 
