@@ -1,229 +1,227 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { supabase, sessionStorage } from '../lib/supabaseClient';
-import { mockApiResponse } from '../utils/mockApi';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 // Create User Context
 const UserContext = createContext();
 
-// User Context Provider
+/**
+ * UserProvider - Manages authentication state and user data
+ * 
+ * SECURITY IMPROVEMENTS:
+ * - Removed exposed setters (setUser, setUserData, setIsLoading, setError)
+ * - Single source of truth for session management
+ * - Proper dependency arrays to prevent infinite loops
+ * - Automatic token refresh handled by Supabase
+ */
 export function UserProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const refreshTimerRef = useRef(null);
 
-  // Fetch user session and restore from localStorage
+  // Effect 1: Initialize session and set up auth state listener
+  // This runs ONLY ONCE when the component mounts
   useEffect(() => {
-    const initializeSession = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+    let mounted = true;
 
-        // Restore session from localStorage (handled automatically by Supabase)
-        // This will check for existing session and refresh if needed
-        const session = await sessionStorage.restore();
+    const initializeAuth = async () => {
+      try {
+        // Get the current session (automatically restored from localStorage by Supabase)
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          if (mounted) {
+            setError(sessionError.message);
+            setUser(null);
+            setIsLoading(false);
+          }
+          return;
+        }
+
         if (session?.user) {
-          setUser(session.user);
-          console.log('Session restored successfully');
+          console.log('Session restored successfully:', session.user.email);
+          if (mounted) {
+            setUser(session.user);
+          }
         } else {
-          setUser(null);
           console.log('No active session found');
+          if (mounted) {
+            setUser(null);
+            setIsLoading(false);
+          }
         }
       } catch (err) {
         console.error('Session initialization error:', err);
-        setError(err.message || 'Failed to initialize session');
-        setUser(null);
-      } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setError(err.message || 'Failed to initialize session');
+          setUser(null);
+          setIsLoading(false);
+        }
       }
     };
 
-    initializeSession();
+    initializeAuth();
 
-    // Listen for auth state changes (sign in, sign out, token refresh)
+    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email || 'no user');
+        console.log('Auth event:', event);
         
-        // Update user state
-        setUser(session?.user || null);
-        setIsLoading(false);
+        if (!mounted) return;
+
+        const currentUser = session?.user || null;
+        setUser(currentUser);
 
         // Handle different auth events
         switch (event) {
           case 'SIGNED_IN':
-            console.log('User signed in');
-            // Session is automatically saved to localStorage by Supabase
+            console.log('User signed in:', currentUser?.email);
             break;
+          
           case 'SIGNED_OUT':
             console.log('User signed out');
-            // Clear any custom cookies
-            if (typeof document !== 'undefined') {
-              document.cookie = 'tp_user=; path=/; max-age=0; SameSite=Lax';
-            }
             setUserData(null);
+            setError(null);
             break;
+          
           case 'TOKEN_REFRESHED':
-            console.log('Token refreshed');
-            // Session is automatically updated in localStorage
+            console.log('Token refreshed successfully');
             break;
+          
           case 'USER_UPDATED':
-            console.log('User updated');
+            console.log('User data updated');
             break;
+          
           default:
             break;
         }
+
+        // Set loading to false after any auth event
+        setIsLoading(false);
       }
     );
 
-    // Set up automatic token refresh check (every 50 minutes)
-    // Supabase handles this automatically, but we can verify it's working
-    refreshTimerRef.current = setInterval(async () => {
+    // Cleanup function
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []); // Empty dependency array - runs only once on mount
+
+  // Effect 2: Fetch user profile data when user changes
+  // This depends ONLY on user.id to prevent unnecessary refetches
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchUserData = async () => {
+      // If no user, clear data and return
+      if (!user?.id) {
+        if (mounted) {
+          setUserData(null);
+          setIsLoading(false);
+        }
+        return;
+      }
+
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const now = Math.floor(Date.now() / 1000);
-          const expiresAt = session.expires_at;
-          
-          // If token expires in less than 10 minutes, refresh it
-          if (expiresAt && (expiresAt - now) < 600) {
-            console.log('Refreshing token proactively...');
-            await supabase.auth.refreshSession();
+        // Fetch user profile from database
+        const { data, error: fetchError } = await supabase
+          .from('data_user')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (fetchError) {
+          // If profile doesn't exist (PGRST116 error), create fallback data
+          if (fetchError.code === 'PGRST116') {
+            console.warn('No profile found for user, using fallback data');
+            if (mounted) {
+              setUserData({
+                id: user.id,
+                email: user.email,
+                name: user.user_metadata?.name || user.user_metadata?.full_name || 'User',
+                prename: user.user_metadata?.prename || '',
+                role: 'user',
+                terms: false,
+                created_at: user.created_at,
+                points: 0,
+              });
+            }
+          } else {
+            throw fetchError;
+          }
+        } else {
+          // Profile found successfully
+          console.log('User profile loaded successfully');
+          if (mounted) {
+            setUserData(data);
           }
         }
       } catch (err) {
-        console.error('Token refresh check error:', err);
-      }
-    }, 50 * 60 * 1000); // Check every 50 minutes
-
-    return () => {
-      subscription.unsubscribe();
-      if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Fetch user data when user changes
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (!user) {
-        setUserData(null);
-        return;
-      }
-      
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        // Try to fetch from API endpoint first
-        const response = await fetch('/api/userdata', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${user.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        // Check if response is ok and content type is JSON
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error('Response is not JSON');
-        }
-        
-        const data = await response.json();
-        setUserData(data);
-        setError(null);
-      } catch (err) {
-        console.warn('API fetch failed, using mock data:', err.message);
-        // Use mock API for development
-        try {
-          const mockData = await mockApiResponse(user);
-          setUserData(mockData);
-          setError(null);
-        } catch (mockErr) {
-          console.error('Mock API also failed:', mockErr.message);
-          // Final fallback to basic data
-          setUserData({
-            name: user?.user_metadata?.name || user?.user_metadata?.full_name || 'User',
-            email: user?.email || 'user@example.com',
-            role: 'Premium User',
-            balance: '125.50',
-            id: user?.id,
-            created_at: user?.created_at,
-            last_sign_in: user?.last_sign_in_at,
-          });
-          setError(null);
+        console.error('Error fetching user data:', err);
+        if (mounted) {
+          setError(err.message);
         }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
-    
-    fetchUserData();
-  }, [user]);
 
-  // Function to manually refresh user data
+    fetchUserData();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]); // Only depends on user.id - stable and efficient
+
+  // Function to manually refresh user data (e.g., after profile update)
   const refreshUserData = async () => {
-    if (!user) return;
-    
-    setIsLoading(true);
-    setError(null);
-    
+    if (!user?.id) return;
+
     try {
-      // Try to fetch from API endpoint first
-      const response = await fetch('/api/userdata', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${user.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Response is not JSON');
-      }
-      
-      const data = await response.json();
+      const { data, error: fetchError } = await supabase
+        .from('data_user')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
       setUserData(data);
       setError(null);
     } catch (err) {
-      console.warn('Manual refresh failed, using mock data:', err.message);
-      // Use mock API for development
-      try {
-        const mockData = await mockApiResponse(user);
-        setUserData(mockData);
-        setError(null);
-      } catch (mockErr) {
-        console.error('Mock API also failed:', mockErr.message);
-        setError(mockErr.message);
-      }
-    } finally {
-      setIsLoading(false);
+      console.error('Error refreshing user data:', err);
+      setError(err.message);
     }
   };
 
+  // Sign out function
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      // Clear local state
+      setUser(null);
+      setUserData(null);
+      setError(null);
+    } catch (err) {
+      console.error('Error signing out:', err);
+      setError(err.message);
+    }
+  };
+
+  // Context value - ONLY expose what's needed, no setters
   const value = {
     user,
     userData,
     isLoading,
     error,
-    setUser,
-    setUserData,
-    setIsLoading,
-    setError,
     refreshUserData,
+    signOut,
   };
 
   return (

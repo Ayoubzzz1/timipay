@@ -11,4 +11,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    headers: {
+      // Enable CORS for video files
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+    // Configure CORS for static files
+    cors: true,
+  },
+  // Ensure video files are served with correct MIME types
+  assetsInclude: ['**/*.mp4', '**/*.webm', '**/*.ogg'],
 })

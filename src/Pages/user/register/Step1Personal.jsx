@@ -129,12 +129,13 @@ function Step1Personal({ form, errors, oauthGoogle, updateField, setShowTerms, s
               type="checkbox" 
               name="terms" 
               id="terms" 
-              checked={form.terms} 
-              disabled
+              checked={form.terms === true} 
+              onChange={() => {}} // Prevent direct changes, only via modal
               readOnly
             />
             <label className="form-check-label" htmlFor="terms">
               I agree to the <button type="button" className="btn btn-link p-0 align-baseline text-warning text-decoration-none" onClick={() => setShowTerms(true)}>Terms & Privacy Policy</button>
+              {form.terms && <span className="text-success ms-2"><i className="bi bi-check-circle-fill"></i> Accepted</span>}
             </label>
             {errors.terms && <div className="invalid-feedback d-block">{errors.terms}</div>}
           </div>

@@ -74,6 +74,8 @@ function Register() {
   const handleStep1 = async () => {
     if (!validateStep1()) return
     
+    console.log('Step 1 - Terms value:', form.terms, 'Type:', typeof form.terms)
+    
     // Handle Google OAuth flow
     if (oauthGoogle) {
       try {
@@ -89,6 +91,8 @@ function Register() {
               phone: form.phone || '' 
             } 
           })
+          const termsValue = !!form.terms // Convert to boolean: true if truthy, false if falsy
+          console.log('OAuth - Saving terms as:', termsValue, 'from form.terms:', form.terms)
           await supabase.from('data_user').upsert({
             id: u.id,
             email: u.email,
@@ -98,7 +102,7 @@ function Register() {
             role: 'user',
             phone: form.phone || '',
             interests: [],
-            terms: form.terms === true
+            terms: termsValue
           }, { onConflict: 'id' })
         }
       } catch (err) {
@@ -188,9 +192,11 @@ function Register() {
       const { data } = await supabase.auth.getUser()
       const user = data?.user
       if (user) {
+        const termsValue = !!form.terms // Convert to boolean
+        console.log('Step 3 - Saving terms as:', termsValue, 'from form.terms:', form.terms, 'type:', typeof form.terms)
         await supabase.from('data_user').update({ 
           interests, 
-          terms: form.terms === true 
+          terms: termsValue 
         }).eq('id', user.id)
       }
     } catch (err) {
@@ -235,9 +241,11 @@ function Register() {
       }
 
       // Update user profile with interests
+      const termsValue = !!form.terms // Convert to boolean
+      console.log('Finish - Saving terms as:', termsValue, 'from form.terms:', form.terms, 'type:', typeof form.terms)
       const { error: updateError } = await supabase.from('data_user').update({
         interests: interests,
-        terms: form.terms === true
+        terms: termsValue
       }).eq('id', data.user.id)
 
       if (updateError) {
@@ -298,15 +306,16 @@ function Register() {
           // User is coming from verification page, check if they're verified
           const { data } = await supabase.auth.getUser()
           if (data?.user?.email_confirmed_at) {
-            // Update form with user metadata
-            setForm(prev => ({
-              ...prev,
-              email: data.user.email || prev.email,
-              name: data.user.user_metadata?.name || prev.name,
-              prename: data.user.user_metadata?.prename || prev.prename,
-              gender: data.user.user_metadata?.gender || prev.gender,
-              phone: data.user.user_metadata?.phone || prev.phone
-            }))
+        // Update form with user metadata
+        setForm(prev => ({
+          ...prev,
+          email: data.user.email || prev.email,
+          name: data.user.user_metadata?.name || prev.name,
+          prename: data.user.user_metadata?.prename || prev.prename,
+          gender: data.user.user_metadata?.gender || prev.gender,
+          phone: data.user.user_metadata?.phone || prev.phone,
+          terms: prev.terms // Preserve terms value
+        }))
             
             // Clean URL
             window.history.replaceState({}, '', window.location.pathname)
@@ -347,7 +356,8 @@ function Register() {
             name: data.user.user_metadata?.name || prev.name,
             prename: data.user.user_metadata?.prename || prev.prename,
             gender: data.user.user_metadata?.gender || prev.gender,
-            phone: data.user.user_metadata?.phone || prev.phone
+            phone: data.user.user_metadata?.phone || prev.phone,
+            terms: prev.terms // Preserve terms value
           }))
           
           try {
@@ -360,7 +370,7 @@ function Register() {
               role: 'user',
               phone: data.user.user_metadata?.phone || '',
               interests: [],
-              terms: form.terms === true
+              terms: !!form.terms
             }, { onConflict: 'id' })
           } catch (err) {
             console.error('Profile creation error:', err)
@@ -399,7 +409,8 @@ function Register() {
           name: session.user.user_metadata?.name || prev.name,
           prename: session.user.user_metadata?.prename || prev.prename,
           gender: session.user.user_metadata?.gender || prev.gender,
-          phone: session.user.user_metadata?.phone || prev.phone
+          phone: session.user.user_metadata?.phone || prev.phone,
+          terms: prev.terms // Preserve terms value
         }))
         
         // Create or update user profile
@@ -413,7 +424,7 @@ function Register() {
             role: 'user',
             phone: session.user.user_metadata?.phone || '',
             interests: [],
-            terms: form.terms === true
+            terms: !!form.terms
           }, { onConflict: 'id' })
         } catch (err) {
           console.error('Profile creation error:', err)
@@ -578,7 +589,16 @@ function Register() {
       <Popterms 
         open={showTerms} 
         onClose={() => setShowTerms(false)} 
-        onAccept={() => { setForm(prev => ({ ...prev, terms: true })); setShowTerms(false); }}
+        onAccept={() => { 
+          console.log('Terms modal - Accept clicked, current form.terms:', form.terms);
+          setForm(prev => {
+            const newForm = { ...prev, terms: true };
+            console.log('Terms modal - Setting form.terms to true, new form:', newForm);
+            return newForm;
+          }); 
+          setShowTerms(false);
+          toast.success('Terms and conditions accepted!');
+        }}
       />
     </>
   )

@@ -44,9 +44,11 @@ export const sessionStorage = {
     if (typeof window !== 'undefined') {
       // Clear Supabase session
       await supabase.auth.signOut();
-      // Clear any custom session cookies
-      document.cookie = 'sb-auth-token=; path=/; max-age=0; SameSite=Lax';
-      document.cookie = 'tp_user=; path=/; max-age=0; SameSite=Lax';
+      // Clear any custom session cookies with secure flags
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+      const secureFlag = isSecure ? '; Secure' : '';
+      document.cookie = `sb-auth-token=; path=/; max-age=0; SameSite=Lax${secureFlag}`;
+      document.cookie = `tp_user=; path=/; max-age=0; SameSite=Lax${secureFlag}`;
       // Clear localStorage items related to Supabase (with our project ref)
       const supabaseKeys = Object.keys(localStorage).filter(key => 
         key.startsWith('sb-') || key.startsWith('supabase.auth.')
