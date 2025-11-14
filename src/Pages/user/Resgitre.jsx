@@ -31,6 +31,7 @@ function Register() {
   const [errors, setErrors] = useState({})
   const [oauthGoogle, setOauthGoogle] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
+  const [geoData, setGeoData] = useState(null)
 
   const allInterests = ['Sport', 'Food', 'Technology', 'Music', 'Movies', 'Travel', 'Reading', 'Gaming', 'Fitness', 'Art', 'Photography', 'Cooking']
 
@@ -40,6 +41,140 @@ function Register() {
     { number: 3, title: 'Interests', icon: '🎯' },
     { number: 4, title: 'Complete', icon: '🎉' }
   ]
+
+  // Fetch geolocation data on mount - using CORS-friendly APIs
+  useEffect(() => {
+    const fetchGeoData = async () => {
+      try {
+        console.log('Fetching geolocation data from ip-api.com...')
+        const response = await fetch('http://ip-api.com/json/')
+        console.log('ip-api.com response status:', response.status)
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        
+        const data = await response.json()
+        console.log('Raw ip-api.com data:', data)
+        
+        if (data.status === 'fail') {
+          console.error('ip-api.com error:', data.message)
+          await fetchGeoDataFallback()
+          return
+        }
+        
+        const geoInfo = {
+          ip: data.query || 'unknown',
+          country: data.country || 'unknown',
+          region: data.regionName || 'unknown',
+          continent: data.continentCode || 'unknown',
+          pack: `${data.countryCode || 'XX'}-${data.region || 'XX'}`
+        }
+        
+        setGeoData(geoInfo)
+        console.log('Geolocation data successfully stored:', geoInfo)
+        toast.success(`Location detected: ${geoInfo.country}`, { duration: 2000 })
+      } catch (error) {
+        console.error('Failed to fetch from ip-api.com:', error)
+        await fetchGeoDataFallback()
+      }
+    }
+    
+    const fetchGeoDataFallback = async () => {
+      try {
+        console.log('Trying fallback: getting IP from ipify.org...')
+        const ipResponse = await fetch('https://api.ipify.org?format=json')
+        
+        if (!ipResponse.ok) {
+          throw new Error('ipify failed')
+        }
+        
+        const ipData = await ipResponse.json()
+        console.log('IP from ipify:', ipData.ip)
+        
+        // Use ipapi.co with the specific IP (less likely to be blocked)
+        console.log('Getting location from ipapi.co...')
+        const geoResponse = await fetch(`https://ipapi.co/${ipData.ip}/json/`)
+        
+        if (!geoResponse.ok) {
+          throw new Error('ipapi.co failed')
+        }
+        
+        const geoDataResult = await geoResponse.json()
+        console.log('Geo data from ipapi.co:', geoDataResult)
+        
+        if (geoDataResult.error) {
+          throw new Error(geoDataResult.reason)
+        }
+        
+        const geoInfo = {
+          ip: ipData.ip || 'unknown',
+          country: geoDataResult.country_name || 'unknown',
+          region: geoDataResult.region || 'unknown',
+          continent: geoDataResult.continent_code || 'unknown',
+          pack: `${geoDataResult.country_code || 'XX'}-${geoDataResult.region_code || 'XX'}`
+        }
+        
+        setGeoData(geoInfo)
+        console.log('Geolocation data from fallback:', geoInfo)
+        toast.success(`Location detected: ${geoInfo.country}`, { duration: 2000 })
+      } catch (error) {
+        console.error('All geolocation APIs failed:', error)
+        toast.error('Could not detect location. Registration will continue.', { duration: 3000 })
+      }
+    }
+    
+    fetchGeoData()
+  }, [])
+
+  // Save user region to database
+  const saveUserRegion = async (userId) => {
+    if (!userId) {
+      console.error('No user ID provided for region save')
+      return
+    }
+
+    if (!geoData) {
+      console.warn('No geolocation data available to save')
+      return
+    }
+
+    try {
+      console.log('Attempting to save user region:', {
+        user_id: userId,
+        ip_address: geoData.ip,
+        country: geoData.country,
+        region: geoData.region,
+        continent: geoData.continent,
+        pack: geoData.pack
+      })
+
+      const { data, error } = await supabase
+        .from('user_region')
+        .insert({
+          user_id: userId,
+          ip_address: geoData.ip,
+          country: geoData.country,
+          region: geoData.region,
+          continent: geoData.continent,
+          pack: geoData.pack
+        })
+        .select()
+
+      if (error) {
+        console.error('Error saving user region:', error)
+        console.error('Error code:', error.code)
+        console.error('Error message:', error.message)
+        console.error('Error details:', error.details)
+        console.error('Error hint:', error.hint)
+      } else {
+        console.log('✅ User region saved successfully:', data)
+        toast.success('Location saved!', { duration: 2000 })
+      }
+    } catch (error) {
+      console.error('Exception saving user region:', error)
+    }
+  }
 
   const updateField = (e) => {
     const { name, value, type, checked } = e.target
@@ -91,7 +226,7 @@ function Register() {
               phone: form.phone || '' 
             } 
           })
-          const termsValue = !!form.terms // Convert to boolean: true if truthy, false if falsy
+          const termsValue = !!form.terms
           console.log('OAuth - Saving terms as:', termsValue, 'from form.terms:', form.terms)
           await supabase.from('data_user').upsert({
             id: u.id,
@@ -104,6 +239,11 @@ function Register() {
             interests: [],
             terms: termsValue
           }, { onConflict: 'id' })
+          
+          // Save user region for OAuth users
+          setTimeout(async () => {
+            await saveUserRegion(u.id)
+          }, 1500)
         }
       } catch (err) {
         console.error('OAuth update error:', err)
@@ -192,7 +332,7 @@ function Register() {
       const { data } = await supabase.auth.getUser()
       const user = data?.user
       if (user) {
-        const termsValue = !!form.terms // Convert to boolean
+        const termsValue = !!form.terms
         console.log('Step 3 - Saving terms as:', termsValue, 'from form.terms:', form.terms, 'type:', typeof form.terms)
         await supabase.from('data_user').update({ 
           interests, 
@@ -241,7 +381,7 @@ function Register() {
       }
 
       // Update user profile with interests
-      const termsValue = !!form.terms // Convert to boolean
+      const termsValue = !!form.terms
       console.log('Finish - Saving terms as:', termsValue, 'from form.terms:', form.terms, 'type:', typeof form.terms)
       const { error: updateError } = await supabase.from('data_user').update({
         interests: interests,
@@ -252,12 +392,15 @@ function Register() {
         throw updateError
       }
 
+      // Save user region one final time
+      await saveUserRegion(data.user.id)
+
       toast.success('Profile completed! Redirecting...', { id: t })
       
       // Small delay to show success message
       setTimeout(() => {
         navigate('/dashboard', { replace: true })
-      }, 500)
+      }, 1000)
     } catch (err) {
       console.error('Profile finalization error:', err)
       toast.error('Could not finalize profile. Please try again.')
@@ -306,16 +449,16 @@ function Register() {
           // User is coming from verification page, check if they're verified
           const { data } = await supabase.auth.getUser()
           if (data?.user?.email_confirmed_at) {
-        // Update form with user metadata
-        setForm(prev => ({
-          ...prev,
-          email: data.user.email || prev.email,
-          name: data.user.user_metadata?.name || prev.name,
-          prename: data.user.user_metadata?.prename || prev.prename,
-          gender: data.user.user_metadata?.gender || prev.gender,
-          phone: data.user.user_metadata?.phone || prev.phone,
-          terms: prev.terms // Preserve terms value
-        }))
+            // Update form with user metadata
+            setForm(prev => ({
+              ...prev,
+              email: data.user.email || prev.email,
+              name: data.user.user_metadata?.name || prev.name,
+              prename: data.user.user_metadata?.prename || prev.prename,
+              gender: data.user.user_metadata?.gender || prev.gender,
+              phone: data.user.user_metadata?.phone || prev.phone,
+              terms: prev.terms
+            }))
             
             // Clean URL
             window.history.replaceState({}, '', window.location.pathname)
@@ -338,7 +481,7 @@ function Register() {
   useEffect(() => {
     // Only listen for auth changes when we're on step 2 (waiting for email verification)
     if (currentStep !== 2) {
-      return // Exit early if not on step 2
+      return
     }
 
     let mounted = true
@@ -357,7 +500,7 @@ function Register() {
             prename: data.user.user_metadata?.prename || prev.prename,
             gender: data.user.user_metadata?.gender || prev.gender,
             phone: data.user.user_metadata?.phone || prev.phone,
-            terms: prev.terms // Preserve terms value
+            terms: prev.terms
           }))
           
           try {
@@ -372,6 +515,11 @@ function Register() {
               interests: [],
               terms: !!form.terms
             }, { onConflict: 'id' })
+            
+            // Save user region after profile creation
+            setTimeout(async () => {
+              await saveUserRegion(data.user.id)
+            }, 1500)
           } catch (err) {
             console.error('Profile creation error:', err)
           }
@@ -410,7 +558,7 @@ function Register() {
           prename: session.user.user_metadata?.prename || prev.prename,
           gender: session.user.user_metadata?.gender || prev.gender,
           phone: session.user.user_metadata?.phone || prev.phone,
-          terms: prev.terms // Preserve terms value
+          terms: prev.terms
         }))
         
         // Create or update user profile
@@ -426,6 +574,11 @@ function Register() {
             interests: [],
             terms: !!form.terms
           }, { onConflict: 'id' })
+          
+          // Save user region after profile creation
+          setTimeout(async () => {
+            await saveUserRegion(session.user.id)
+          }, 1500)
         } catch (err) {
           console.error('Profile creation error:', err)
         }
@@ -441,7 +594,7 @@ function Register() {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [currentStep, form.terms])
+  }, [currentStep, form.terms, geoData])
 
   const resendVerificationEmail = async () => {
     try {
@@ -565,7 +718,19 @@ function Register() {
                               <div className="text-start small">
                                 <div className="mb-1"><strong>Name:</strong> {form.name} {form.prename}</div>
                                 <div className="mb-1"><strong>Email:</strong> {form.email}</div>
-                                <div><strong>Interests:</strong> {interests.join(', ') || 'None selected'}</div>
+                                <div className="mb-1"><strong>Interests:</strong> {interests.join(', ') || 'None selected'}</div>
+                                {geoData ? (
+                                  <div className="mt-2 pt-2 border-top">
+                                    <div className="mb-1"><strong>IP:</strong> {geoData.ip}</div>
+                                    <div className="mb-1"><strong>Location:</strong> {geoData.region}, {geoData.country}</div>
+                                    <div className="mb-1"><strong>Continent:</strong> {geoData.continent}</div>
+                                    <div className="mb-1"><strong>Pack:</strong> {geoData.pack}</div>
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 pt-2 border-top">
+                                    <div className="text-warning"><small>⚠️ Location data not available</small></div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

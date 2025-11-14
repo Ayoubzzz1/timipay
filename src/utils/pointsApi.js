@@ -1,240 +1,145 @@
-// src/utils/pointsApi.js
-// Utility functions for managing user points
+// utils/pointsApi.js
+// Handles all Supabase database operations for user points
 
-import { supabase } from '../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
-/**
- * Points API - Secure client-side interface for points management
- * 
- * SECURITY NOTES:
- * - All operations require authentication
- * - Points are validated and logged on the backend
- * - Direct manipulation is prevented by RLS policies
- */
+// For Create React App (CRA) - use REACT_APP_ prefix
+// For Vite - use VITE_ prefix
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
- * Add points to the current user's account
- * @param {number} points - Number of points to add
- * @param {string} actionType - Type of action (e.g., 'video_watch', 'bonus')
- * @param {object} metadata - Additional metadata to log
+ * Get current user's points from database
  * @returns {Promise<{success: boolean, points: number, error?: string}>}
  */
-export async function addPoints(points, actionType = 'video_watch', metadata = {}) {
+export const getPoints = async () => {
   try {
-    // Validate input
-    if (typeof points !== 'number' || points <= 0) {
-      throw new Error('Invalid points value');
-    }
-
-    // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
     if (authError || !user) {
-      throw new Error('User not authenticated');
+      console.error('Auth error:', authError);
+      return { success: false, points: 0, error: 'User not authenticated' };
     }
 
-    // Call Supabase function to add points
-    const { data, error } = await supabase.rpc('add_user_points', {
-      p_user_id: user.id,
-      p_points: points,
-      p_action_type: actionType,
-      p_metadata: metadata,
-    });
-
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      const result = data[0];
-      return {
-        success: result.success,
-        points: result.new_points,
-        message: result.message,
-      };
-    }
-
-    throw new Error('Unexpected response from server');
-  } catch (error) {
-    console.error('Error adding points:', error);
-    return {
-      success: false,
-      points: 0,
-      error: error.message,
-    };
-  }
-}
-
-/**
- * Get current user's points balance
- * @returns {Promise<{success: boolean, points: number, error?: string}>}
- */
-export async function getPoints() {
-  try {
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      throw new Error('User not authenticated');
-    }
-
-    // Fetch points from database
+    // FIXED: Changed from 'dat_user' to 'data_user'
     const { data, error } = await supabase
       .from('data_user')
       .select('points')
       .eq('id', user.id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching points:', error);
+      return { success: false, points: 0, error: error.message };
+    }
 
-    return {
-      success: true,
-      points: data?.points || 0,
+    return { 
+      success: true, 
+      points: data?.points || 0 
     };
-  } catch (error) {
-    console.error('Error getting points:', error);
-    return {
-      success: false,
-      points: 0,
-      error: error.message,
-    };
+  } catch (err) {
+    console.error('Unexpected error:', err);
+    return { success: false, points: 0, error: err.message };
   }
-}
+};
 
 /**
- * Sync points to the backend (direct update)
- * Use this for periodic syncing from the video player
- * @param {number} newPoints - New total points value
- * @returns {Promise<{success: boolean, error?: string}>}
+ * Add points to current user's balance
+ * @param {number} pointsToAdd - Number of points to add
+ * @param {string} source - Source of points (e.g., 'ad_watch')
+ * @param {object} metadata - Additional tracking data
+ * @returns {Promise<{success: boolean, points: number, error?: string}>}
  */
-export async function syncPoints(newPoints) {
+export const addPoints = async (pointsToAdd, source = 'ad_watch', metadata = {}) => {
   try {
-    // Validate input
-    if (typeof newPoints !== 'number' || newPoints < 0) {
-      throw new Error('Invalid points value');
-    }
-
-    // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
     if (authError || !user) {
-      throw new Error('User not authenticated');
+      console.error('Auth error:', authError);
+      return { success: false, points: 0, error: 'User not authenticated' };
     }
 
-    // Update points directly
-    const { error } = await supabase
+    // FIXED: Changed from 'dat_user' to 'data_user'
+    // Get current points
+    const { data: currentData, error: fetchError } = await supabase
       .from('data_user')
-      .update({ points: newPoints })
-      .eq('id', user.id);
+      .select('points')
+      .eq('id', user.id)
+      .single();
 
-    if (error) throw error;
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error syncing points:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-}
-
-/**
- * Get user's points history
- * @param {number} limit - Maximum number of records to fetch
- * @returns {Promise<{success: boolean, history: Array, error?: string}>}
- */
-export async function getPointsHistory(limit = 50) {
-  try {
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      throw new Error('User not authenticated');
+    if (fetchError) {
+      console.error('Error fetching current points:', fetchError);
+      return { success: false, points: 0, error: fetchError.message };
     }
 
-    // Fetch history
-    const { data, error } = await supabase
-      .from('points_history')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    const currentPoints = currentData?.points || 0;
+    const newPoints = currentPoints + pointsToAdd;
 
-    if (error) throw error;
+    // Update points
+    const { data: updatedData, error: updateError } = await supabase
+      .from('data_user')
+      .update({ 
+        points: newPoints,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+      .select('points')
+      .single();
 
-    return {
-      success: true,
-      history: data || [],
+    if (updateError) {
+      console.error('Error updating points:', updateError);
+      return { success: false, points: currentPoints, error: updateError.message };
+    }
+
+    // Optional: Log the transaction in a separate table for analytics
+    // await logPointsTransaction(user.id, pointsToAdd, source, metadata);
+
+    console.log(`Points updated: ${currentPoints} -> ${newPoints} (+${pointsToAdd})`);
+    
+    return { 
+      success: true, 
+      points: updatedData.points,
+      added: pointsToAdd
     };
-  } catch (error) {
-    console.error('Error getting points history:', error);
-    return {
-      success: false,
-      history: [],
-      error: error.message,
-    };
+  } catch (err) {
+    console.error('Unexpected error:', err);
+    return { success: false, points: 0, error: err.message };
   }
-}
+};
 
 /**
- * Get points leaderboard
- * @param {number} limit - Number of top users to fetch
- * @returns {Promise<{success: boolean, leaderboard: Array, error?: string}>}
+ * Optional: Create a points_history table for tracking
+ * 
+ * SQL to create the table in Supabase:
+ * 
+ * CREATE TABLE points_history (
+ *   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+ *   user_id UUID REFERENCES data_user(id) ON DELETE CASCADE,
+ *   points_change INTEGER NOT NULL,
+ *   source TEXT NOT NULL,
+ *   ad_name TEXT,
+ *   seconds_watched INTEGER,
+ *   created_at TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * CREATE INDEX idx_points_history_user_id ON points_history(user_id);
+ * CREATE INDEX idx_points_history_created_at ON points_history(created_at);
  */
-export async function getLeaderboard(limit = 10) {
+const logPointsTransaction = async (userId, pointsChange, source, metadata) => {
   try {
-    // Call Supabase function
-    const { data, error } = await supabase.rpc('get_points_leaderboard', {
-      limit_count: limit,
-    });
-
-    if (error) throw error;
-
-    return {
-      success: true,
-      leaderboard: data || [],
-    };
-  } catch (error) {
-    console.error('Error getting leaderboard:', error);
-    return {
-      success: false,
-      leaderboard: [],
-      error: error.message,
-    };
+    await supabase
+      .from('points_history')
+      .insert({
+        user_id: userId,
+        points_change: pointsChange,
+        source: source,
+        ad_name: metadata.ad_name || null,
+        seconds_watched: metadata.seconds_watched || null,
+        created_at: new Date().toISOString()
+      });
+  } catch (err) {
+    console.error('Error logging points transaction:', err);
   }
-}
-
-/**
- * Subscribe to real-time points updates
- * @param {string} userId - User ID to subscribe to
- * @param {Function} callback - Callback function to handle updates
- * @returns {Function} Unsubscribe function
- */
-export function subscribeToPointsUpdates(userId, callback) {
-  const subscription = supabase
-    .channel(`points:${userId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'data_user',
-        filter: `id=eq.${userId}`,
-      },
-      (payload) => {
-        if (payload.new && typeof payload.new.points === 'number') {
-          callback(payload.new.points);
-        }
-      }
-    )
-    .subscribe();
-
-  // Return unsubscribe function
-  return () => {
-    supabase.removeChannel(subscription);
-  };
-}
-
-export default {
-  addPoints,
-  getPoints,
-  syncPoints,
-  getPointsHistory,
-  getLeaderboard,
-  subscribeToPointsUpdates,
 };

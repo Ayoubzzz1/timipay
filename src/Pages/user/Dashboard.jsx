@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Calendar, Tag, Heart, Shield, Edit2, Save, X, CheckCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Tag, Heart, Shield, Edit2, Save, X, CheckCircle, AlertCircle, Loader2, Eye, EyeOff, MapPin, Globe } from 'lucide-react';
 import MuiNavbar from '../../compoents/Navbars/MuiNavbar';
 import { useUser } from '../../contexts/UserContext';
 import { supabase } from '../../lib/supabaseClient';
@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabaseClient';
  * 
  * IMPROVEMENTS:
  * - Uses UserContext as single source of truth
+ * - Fetches and displays user region data
  * - No redundant data fetching
  * - Proper redirect handling
  * - Clean state management
@@ -25,6 +26,8 @@ function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', type: 'success' });
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(false);
+  const [locationData, setLocationData] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(true);
 
   // Redirect to signin if not authenticated
   useEffect(() => {
@@ -39,6 +42,37 @@ function Dashboard() {
       setEditedData(userData);
     }
   }, [userData]);
+
+  // Fetch user location data
+  useEffect(() => {
+    const fetchLocationData = async () => {
+      if (!user?.id) return;
+      
+      setLoadingLocation(true);
+      try {
+        const { data, error } = await supabase
+          .from('user_region')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error fetching location data:', error);
+        } else {
+          setLocationData(data);
+          console.log('Location data loaded:', data);
+        }
+      } catch (err) {
+        console.error('Exception fetching location data:', err);
+      } finally {
+        setLoadingLocation(false);
+      }
+    };
+
+    fetchLocationData();
+  }, [user?.id]);
 
   const handleEdit = () => {
     setEditMode(true);
@@ -176,6 +210,12 @@ function Dashboard() {
                 <Mail className="w-4 h-4" />
                 {userData.email}
               </p>
+              {locationData && (
+                <p className="text-blue-100 flex items-center gap-2 mt-1">
+                  <MapPin className="w-4 h-4" />
+                  {locationData.region}, {locationData.country}
+                </p>
+              )}
             </div>
             <div className="bg-white bg-opacity-20 backdrop-blur rounded-full p-4">
               <User className="w-12 h-12" />
@@ -354,6 +394,69 @@ function Dashboard() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* Location Information Section */}
+              <div className="pt-6 border-t border-gray-200">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-green-600" />
+                  Location Information
+                </h3>
+                {loadingLocation ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                    <span className="ml-2 text-gray-500">Loading location data...</span>
+                  </div>
+                ) : locationData ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        Country
+                      </label>
+                      <p className="px-4 py-2 bg-gray-50 rounded-lg">{locationData.country || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Region</label>
+                      <p className="px-4 py-2 bg-gray-50 rounded-lg">{locationData.region || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Continent</label>
+                      <p className="px-4 py-2 bg-gray-50 rounded-lg">{locationData.continent || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Pack</label>
+                      <p className="px-4 py-2 bg-gray-50 rounded-lg font-mono text-sm">{locationData.pack || '-'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">IP Address</label>
+                      <div className="flex items-center gap-2">
+                        <p className="flex-1 px-4 py-2 bg-gray-50 rounded-lg font-mono text-sm">
+                          {showSensitiveInfo ? (locationData.ip_address || '-') : '•••.•••.•••.•••'}
+                        </p>
+                        <button
+                          onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition"
+                        >
+                          {showSensitiveInfo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Registered On</label>
+                      <p className="px-4 py-2 bg-gray-50 rounded-lg">
+                        {locationData.created_at ? new Date(locationData.created_at).toLocaleString() : '-'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center gap-3 text-yellow-800">
+                      <AlertCircle className="w-5 h-5" />
+                      <p className="text-sm">No location data available. This is normal if you just registered.</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Interests Section */}
